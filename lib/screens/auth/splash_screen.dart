@@ -21,35 +21,48 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Future<void> _navigate() async {
-    // Wait for splash animation
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      // Wait for splash animation
+      await Future.delayed(const Duration(seconds: 2));
 
+      if (!mounted) return;
+
+      final storage = StorageService();
+      final authProvider = context.read<AuthProvider>();
+
+      // Check if first launch
+      if (storage.isFirstLaunch()) {
+        _navigateToScreen(const OnboardingScreen());
+        return;
+      }
+
+      // Check if logged in
+      if (authProvider.isAuthenticated) {
+        _navigateToScreen(const DashboardScreen());
+      } else {
+        _navigateToScreen(const LoginScreen());
+      }
+    } catch (e) {
+      // On error, go to login
+      if (mounted) {
+        _navigateToScreen(const LoginScreen());
+      }
+    }
+  }
+
+  void _navigateToScreen(Widget screen) {
     if (!mounted) return;
 
-    final storage = StorageService();
-    final authProvider = context.read<AuthProvider>();
-
-    // Check if first launch
-    if (storage.isFirstLaunch()) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const OnboardingScreen()),
-      );
-      return;
-    }
-
-    // Check if logged in
-    if (authProvider.isAuthenticated) {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const DashboardScreen()),
-      );
-    } else {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
-      );
-    }
+    Navigator.pushReplacement(
+      context,
+      PageRouteBuilder(
+        pageBuilder: (context, animation, secondaryAnimation) => screen,
+        transitionsBuilder: (context, animation, secondaryAnimation, child) {
+          return FadeTransition(opacity: animation, child: child);
+        },
+        transitionDuration: const Duration(milliseconds: 300),
+      ),
+    );
   }
 
   @override
@@ -85,7 +98,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
             // App Name
             const Text(
-              'A3TECH VTU APP',
+              'AZ VTU',
               style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.bold,

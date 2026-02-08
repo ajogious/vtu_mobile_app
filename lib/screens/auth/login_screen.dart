@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../../services/storage_service.dart';
-import '../dashboard/dashboard_screen.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_textfield.dart';
+import '../../utils/ui_helpers.dart';
+import '../dashboard/dashboard_screen.dart';
 import 'register_screen.dart';
 import 'forgot_password_screen.dart';
 
@@ -46,6 +47,9 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _login() async {
+    // Dismiss keyboard
+    UiHelpers.dismissKeyboard(context);
+
     if (!_formKey.currentState!.validate()) return;
 
     final authProvider = context.read<AuthProvider>();
@@ -75,152 +79,156 @@ class _LoginScreenState extends State<LoginScreen> {
       );
     } else {
       // Show error
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(authProvider.error ?? 'Login failed'),
-          backgroundColor: Colors.red,
-        ),
+      UiHelpers.showSnackBar(
+        context,
+        authProvider.error ?? 'Login failed',
+        isError: true,
       );
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      body: SafeArea(
-        child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                const SizedBox(height: 40),
+    return GestureDetector(
+      onTap: () => UiHelpers.dismissKeyboard(context),
+      child: Scaffold(
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  const SizedBox(height: 40),
 
-                // Logo
-                Icon(
-                  Icons.phone_android,
-                  size: 80,
-                  color: Theme.of(context).primaryColor,
-                ),
-                const SizedBox(height: 16),
-
-                // Welcome text
-                Text(
-                  'Welcome Back!',
-                  style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+                  // Logo
+                  Icon(
+                    Icons.phone_android,
+                    size: 80,
+                    color: Theme.of(context).primaryColor,
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Login to your account',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 40),
+                  const SizedBox(height: 16),
 
-                // Username field (using CustomTextField)
-                CustomTextField(
-                  controller: _usernameController,
-                  labelText: 'Username',
-                  hintText: 'Enter your username',
-                  prefixIcon: Icons.person,
-                  textCapitalization: TextCapitalization.none,
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter your username';
-                    }
-                    if (value.trim().length < 3) {
-                      return 'Username must be at least 3 characters';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Password field (using CustomTextField)
-                CustomTextField(
-                  controller: _passwordController,
-                  labelText: 'Password',
-                  hintText: 'Enter your password',
-                  prefixIcon: Icons.lock,
-                  obscureText: true,
-                  showPasswordToggle: true,
-                  validator: (value) {
-                    if (value == null || value.isEmpty) {
-                      return 'Please enter your password';
-                    }
-                    if (value.length < 6) {
-                      return 'Password must be at least 6 characters';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Remember me & Forgot password
-                Row(
-                  children: [
-                    Checkbox(
-                      value: _rememberMe,
-                      onChanged: (value) {
-                        setState(() {
-                          _rememberMe = value ?? false;
-                        });
-                      },
+                  // Welcome text
+                  Text(
+                    'Welcome Back!',
+                    style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
-                    const Text('Remember me'),
-                    const Spacer(),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const ForgotPasswordScreen(),
-                          ),
-                        );
-                      },
-                      child: const Text('Forgot Password?'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 24),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Login to your account',
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 40),
 
-                // Login button (using CustomButton)
-                Consumer<AuthProvider>(
-                  builder: (context, authProvider, child) {
-                    return CustomButton(
-                      text: 'Login',
-                      onPressed: _login,
-                      isLoading: authProvider.isLoading,
-                    );
-                  },
-                ),
-                const SizedBox(height: 24),
+                  // Username field
+                  CustomTextField(
+                    controller: _usernameController,
+                    labelText: 'Username',
+                    hintText: 'Enter your username',
+                    prefixIcon: Icons.person,
+                    textCapitalization: TextCapitalization.none,
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter your username';
+                      }
+                      if (value.trim().length < 3) {
+                        return 'Username must be at least 3 characters';
+                      }
+                      return null;
+                    },
+                    onSubmitted: (_) => _login(),
+                  ),
+                  const SizedBox(height: 16),
 
-                // Register link
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Text("Don't have an account? "),
-                    TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const RegisterScreen(),
-                          ),
-                        );
-                      },
-                      child: const Text('Register'),
-                    ),
-                  ],
-                ),
-              ],
+                  // Password field
+                  CustomTextField(
+                    controller: _passwordController,
+                    labelText: 'Password',
+                    hintText: 'Enter your password',
+                    prefixIcon: Icons.lock,
+                    obscureText: true,
+                    showPasswordToggle: true,
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please enter your password';
+                      }
+                      if (value.length < 6) {
+                        return 'Password must be at least 6 characters';
+                      }
+                      return null;
+                    },
+                    onSubmitted: (_) => _login(),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Remember me & Forgot password
+                  Row(
+                    children: [
+                      Checkbox(
+                        value: _rememberMe,
+                        onChanged: (value) {
+                          setState(() {
+                            _rememberMe = value ?? false;
+                          });
+                        },
+                      ),
+                      const Text('Remember me'),
+                      const Spacer(),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const ForgotPasswordScreen(),
+                            ),
+                          );
+                        },
+                        child: const Text('Forgot Password?'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Login button
+                  Consumer<AuthProvider>(
+                    builder: (context, authProvider, child) {
+                      return CustomButton(
+                        text: 'Login',
+                        onPressed: _login,
+                        isLoading: authProvider.isLoading,
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Register link
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      const Text("Don't have an account? "),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const RegisterScreen(),
+                            ),
+                          );
+                        },
+                        child: const Text('Register'),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
             ),
           ),
         ),

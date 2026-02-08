@@ -78,6 +78,7 @@ class _PinInputState extends State<PinInput> {
     }
   }
 
+  // ignore: unused_element
   void _onBackspace(int index) {
     if (index > 0 && _controllers[index].text.isEmpty) {
       _focusNodes[index - 1].requestFocus();
