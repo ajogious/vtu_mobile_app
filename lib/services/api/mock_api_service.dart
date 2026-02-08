@@ -20,6 +20,7 @@ class MockApiService implements ApiService {
   double _walletBalance = 5000.0;
   final List<Transaction> _transactions = [];
   final List<VirtualAccount> _virtualAccounts = [];
+  // ignore: unused_field
   bool _hasPin = false;
   String? _savedPin;
   final List<ATCRequest> _atcRequests = [];
