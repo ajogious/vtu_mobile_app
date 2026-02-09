@@ -98,7 +98,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
             // App Name
             const Text(
-              'AZ VTU',
+              'A3TECH VTU APP',
               style: TextStyle(
                 fontSize: 32,
                 fontWeight: FontWeight.bold,
