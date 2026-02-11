@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
+import '../services/storage_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
+  final StorageService _storage = StorageService();
 
   User? _user;
   bool _isLoading = false;
@@ -20,7 +22,7 @@ class AuthProvider extends ChangeNotifier {
 
   // Load user from storage on startup
   void _loadUser() {
-    _user = _authService.getCurrentUser();
+    _user = _storage.getUser();
     notifyListeners();
   }
 
@@ -107,9 +109,10 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Update user
-  void updateUser(User user) {
+  // Update user (and save to storage)
+  Future<void> updateUser(User user) async {
     _user = user;
+    await _storage.saveUser(user);
     notifyListeners();
   }
 

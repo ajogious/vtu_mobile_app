@@ -27,7 +27,7 @@ class ServiceCard extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
             gradient: LinearGradient(
@@ -36,41 +36,59 @@ class ServiceCard extends StatelessWidget {
               colors: [cardColor.withOpacity(0.1), cardColor.withOpacity(0.05)],
             ),
           ),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              // Icon
-              Container(
-                padding: const EdgeInsets.all(12),
-                decoration: BoxDecoration(
-                  color: cardColor.withOpacity(0.2),
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(icon, size: 32, color: cardColor),
-              ),
-              const SizedBox(height: 12),
+          child: LayoutBuilder(
+            builder: (context, constraints) {
+              // Dynamically adjust sizes based on available space
+              final iconSize = constraints.maxHeight * 0.35;
+              final iconPadding = iconSize * 0.15;
 
-              // Title
-              Text(
-                title,
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 4),
+              return Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Icon - scales with available space
+                  Flexible(
+                    flex: 2,
+                    child: Container(
+                      padding: EdgeInsets.all(iconPadding),
+                      decoration: BoxDecoration(
+                        color: cardColor.withOpacity(0.2),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(icon, size: iconSize, color: cardColor),
+                    ),
+                  ),
+                  SizedBox(height: constraints.maxHeight * 0.05),
 
-              // Subtitle
-              Text(
-                subtitle,
-                style: Theme.of(
-                  context,
-                ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
-                textAlign: TextAlign.center,
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
+                  // Title - flexible sizing
+                  Flexible(
+                    child: Text(
+                      title,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                  SizedBox(height: constraints.maxHeight * 0.02),
+
+                  // Subtitle - flexible sizing
+                  Flexible(
+                    child: Text(
+                      subtitle,
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ),
       ),

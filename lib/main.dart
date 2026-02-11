@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'config/theme_config.dart';
 import 'services/storage_service.dart';
@@ -11,6 +12,9 @@ import 'screens/auth/splash_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ✅ Lock to upright portrait only
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   await StorageService().init();
 

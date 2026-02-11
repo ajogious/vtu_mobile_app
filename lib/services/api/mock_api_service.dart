@@ -78,16 +78,18 @@ class MockApiService implements ApiService {
       lastname: 'User',
       phone: '08012345678',
       balance: _walletBalance,
-      kycVerified: true,
+      kycVerified: false,
       referralCode: 'REFTEST123',
       createdAt: DateTime.now().subtract(const Duration(days: 30)),
     );
 
-    if (_transactions.isEmpty) {
-      _generateMockTransactions();
-    }
+    // FORCE generate transactions
+    _transactions.clear();
+    _generateMockTransactions();
 
-    if (_virtualAccounts.isEmpty) {
+    print('After login, transaction count: ${_transactions.length}'); // Debug
+
+    if (_virtualAccounts.isEmpty && _currentUser!.kycVerified) {
       _generateVirtualAccounts();
     }
 
@@ -151,6 +153,7 @@ class MockApiService implements ApiService {
       return ApiResult.failure('Not authenticated');
     }
 
+    // Return current user with updated balance
     _currentUser = _currentUser!.copyWith(balance: _walletBalance);
 
     return ApiResult.success(_currentUser!);
@@ -228,8 +231,12 @@ class MockApiService implements ApiService {
   }) async {
     await _delay(1500);
 
+    // Update current user's KYC status
+    if (_currentUser != null) {
+      _currentUser = _currentUser!.copyWith(kycVerified: true);
+    }
+
     _generateVirtualAccounts();
-    _currentUser = _currentUser?.copyWith(kycVerified: true);
 
     return ApiResult.success(
       _virtualAccounts,
@@ -726,16 +733,25 @@ class MockApiService implements ApiService {
   }) async {
     await _delay();
 
+    print(
+      'Getting transactions - current count: ${_transactions.length}',
+    ); // Debug
+
+    // If no transactions exist, generate them
+    if (_transactions.isEmpty) {
+      _generateMockTransactions();
+    }
+
     List<Transaction> filtered = List.from(_transactions);
 
     // Apply filters
-    if (type != null && type != 'all') {
+    if (type != null && type != 'all' && type.isNotEmpty) {
       filtered = filtered
           .where((t) => t.type.name.toLowerCase() == type.toLowerCase())
           .toList();
     }
 
-    if (status != null && status != 'all') {
+    if (status != null && status != 'all' && status.isNotEmpty) {
       filtered = filtered
           .where((t) => t.status.name.toLowerCase() == status.toLowerCase())
           .toList();
@@ -752,9 +768,11 @@ class MockApiService implements ApiService {
           .toList();
     }
 
+    print('Filtered transactions: ${filtered.length}'); // Debug
+
     // Pagination
     int totalRecords = filtered.length;
-    int totalPages = (totalRecords / limit).ceil();
+    int totalPages = totalRecords > 0 ? (totalRecords / limit).ceil() : 1;
     int start = (page - 1) * limit;
     int end = start + limit;
 
@@ -762,6 +780,8 @@ class MockApiService implements ApiService {
       start,
       end > filtered.length ? filtered.length : end,
     );
+
+    print('Paginated transactions: ${paginated.length}'); // Debug
 
     final result = PaginatedTransactions(
       transactions: paginated,

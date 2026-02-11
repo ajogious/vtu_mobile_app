@@ -5,10 +5,12 @@ import '../../providers/auth_provider.dart';
 import '../../providers/network_provider.dart';
 import '../../providers/wallet_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../wallet/wallet_screen.dart';
 import '../widgets/service_card.dart';
 import '../widgets/transaction_card.dart';
 import '../auth/login_screen.dart';
 import '../profile/profile_screen.dart';
+import '../wallet/kyc_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -23,25 +25,34 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _initializeDashboard();
+    // ✅ FIX: Use addPostFrameCallback to avoid build-time errors
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _initializeDashboard();
+    });
   }
 
   Future<void> _initializeDashboard() async {
+    if (!mounted) return;
+
     final walletProvider = context.read<WalletProvider>();
     final transactionProvider = context.read<TransactionProvider>();
 
-    // Fetch wallet balance
     await walletProvider.fetchBalance();
-
-    // Fetch recent transactions
-    await transactionProvider.fetchTransactions(page: 1, limit: 5);
+    // await transactionProvider.fetchTransactions(page: 1, limit: 5);
+    final success = await transactionProvider.fetchTransactions(
+      page: 1,
+      limit: 5,
+    );
+    // Debug print
+    print('Transactions fetched: $success');
+    print('Transaction count: ${transactionProvider.transactions.length}');
+    print('Recent count: ${transactionProvider.recentTransactions.length}');
   }
 
   Future<void> _refreshDashboard() async {
     final walletProvider = context.read<WalletProvider>();
     final transactionProvider = context.read<TransactionProvider>();
 
-    // Fetch both concurrently
     await Future.wait([
       walletProvider.fetchBalance(),
       transactionProvider.fetchTransactions(page: 1, limit: 5),
@@ -92,6 +103,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final networkProvider = context.watch<NetworkProvider>();
     final walletProvider = context.watch<WalletProvider>();
     final user = authProvider.user;
+
+    // Debug print (remove later)
+    print('User KYC Verified: ${user?.kycVerified}');
 
     return Scaffold(
       appBar: AppBar(
@@ -149,6 +163,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 walletProvider.isLoading,
               ),
 
+              // KYC Prompt Banner - FIXED
+              if (user != null && user.kycVerified == false) _buildKycPrompt(),
+
               // Services Grid
               Padding(
                 padding: const EdgeInsets.all(16),
@@ -170,6 +187,79 @@ class _DashboardScreenState extends State<DashboardScreen> {
               // Recent Transactions
               _buildRecentTransactions(),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Update KYC Prompt to refresh better
+  Widget _buildKycPrompt() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      child: Card(
+        color: Colors.blue[50],
+        child: InkWell(
+          onTap: () async {
+            final result = await Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const KycScreen()),
+            );
+
+            // Refresh user state if KYC was successful
+            if (result == true && mounted) {
+              // Force refresh of auth provider
+              final authProvider = context.read<AuthProvider>();
+              final apiResult = await authProvider.authService.api.getMe();
+              if (apiResult.success && apiResult.data != null) {
+                await authProvider.updateUser(apiResult.data!);
+              }
+
+              // Also refresh dashboard
+              _refreshDashboard();
+            }
+          },
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Colors.blue[100],
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Icon(Icons.shield, color: Colors.blue[700], size: 24),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Complete KYC Verification',
+                        style: TextStyle(
+                          color: Colors.blue[900],
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Get virtual accounts for instant funding',
+                        style: TextStyle(color: Colors.blue[700], fontSize: 13),
+                      ),
+                    ],
+                  ),
+                ),
+                Icon(
+                  Icons.arrow_forward_ios,
+                  color: Colors.blue[700],
+                  size: 16,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -257,7 +347,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
-                        content: Text('Fund Wallet - Coming Soon...'),
+                        content: Text('Fund Wallet - Coming in Day 9'),
                       ),
                     );
                   },
@@ -275,10 +365,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Expanded(
                 child: OutlinedButton.icon(
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Wallet Screen - Coming Soon...'),
-                      ),
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (_) => const WalletScreen()),
                     );
                   },
                   icon: const Icon(Icons.account_balance_wallet, size: 18),
@@ -313,7 +402,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           color: Colors.blue,
           onTap: () {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Buy Airtime - Coming Soon...')),
+              const SnackBar(content: Text('Buy Airtime - Coming in Day 10')),
             );
           },
         ),
@@ -324,7 +413,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           color: Colors.green,
           onTap: () {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Buy Data - Coming Soon...')),
+              const SnackBar(content: Text('Buy Data - Coming in Day 11')),
             );
           },
         ),
@@ -335,7 +424,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           color: Colors.purple,
           onTap: () {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Cable TV - Coming Soon...')),
+              const SnackBar(content: Text('Cable TV - Coming in Day 12')),
             );
           },
         ),
@@ -346,7 +435,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           color: Colors.orange,
           onTap: () {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Electricity - Coming Soon...')),
+              const SnackBar(content: Text('Electricity - Coming in Day 13')),
             );
           },
         ),
@@ -357,7 +446,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           color: Colors.red,
           onTap: () {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Exam Pins - Coming Soon...')),
+              const SnackBar(content: Text('Exam Pins - Coming in Day 14')),
             );
           },
         ),
@@ -368,7 +457,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           color: Colors.teal,
           onTap: () {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Data Cards - Coming Soon...')),
+              const SnackBar(content: Text('Data Cards - Coming in Day 15')),
             );
           },
         ),
@@ -395,7 +484,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 onPressed: () {
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(
-                      content: Text('Transaction List - Coming Soon...'),
+                      content: Text('Transaction List - Coming in Day 17'),
                     ),
                   );
                 },
@@ -404,10 +493,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
             ],
           ),
           const SizedBox(height: 16),
-
           Consumer<TransactionProvider>(
             builder: (context, transactionProvider, child) {
-              // 1️⃣ Loading state
               if (transactionProvider.isLoading) {
                 return const Center(
                   child: Padding(
@@ -417,49 +504,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 );
               }
 
-              // 2️⃣ Error state (NEW)
-              if (transactionProvider.error != null) {
-                return Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      children: [
-                        const Icon(
-                          Icons.error_outline,
-                          size: 48,
-                          color: Colors.redAccent,
-                        ),
-                        const SizedBox(height: 8),
-                        const Text(
-                          'Failed to load transactions',
-                          style: TextStyle(fontWeight: FontWeight.bold),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          transactionProvider.error!,
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 16),
-                        ElevatedButton(
-                          onPressed: () {
-                            transactionProvider.fetchTransactions(
-                              page: 1,
-                              limit: 5,
-                            );
-                          },
-                          child: const Text('Retry'),
-                        ),
-                      ],
-                    ),
-                  ),
-                );
-              }
-
-              // 3️⃣ Empty state
               if (transactionProvider.recentTransactions.isEmpty) {
                 return Card(
                   child: Padding(
@@ -493,7 +537,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 );
               }
 
-              // 4️⃣ Success state
               return Column(
                 children: transactionProvider.recentTransactions
                     .map(
@@ -503,7 +546,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
                           ScaffoldMessenger.of(context).showSnackBar(
                             const SnackBar(
                               content: Text(
-                                'Transaction Detail - Coming Soon...',
+                                'Transaction Detail - Coming in Day 18',
                               ),
                             ),
                           );

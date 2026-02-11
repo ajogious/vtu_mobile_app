@@ -8,6 +8,8 @@ class CustomButton extends StatelessWidget {
   final Color? textColor;
   final IconData? icon;
   final bool isOutlined;
+  final double? width;
+  final double? height;
 
   const CustomButton({
     super.key,
@@ -18,27 +20,25 @@ class CustomButton extends StatelessWidget {
     this.textColor,
     this.icon,
     this.isOutlined = false,
+    this.width,
+    this.height,
   });
 
   @override
   Widget build(BuildContext context) {
-    if (isOutlined) {
-      return OutlinedButton(
-        onPressed: isLoading ? null : onPressed,
-        style: OutlinedButton.styleFrom(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
-          ),
-          side: BorderSide(
-            color: backgroundColor ?? Theme.of(context).primaryColor,
-            width: 2,
-          ),
-        ),
-        child: _buildChild(context),
-      );
+    final Widget button = isOutlined
+        ? _buildOutlinedButton(context)
+        : _buildElevatedButton(context);
+
+    // Wrap with SizedBox if width or height is specified
+    if (width != null || height != null) {
+      return SizedBox(width: width, height: height, child: button);
     }
 
+    return button;
+  }
+
+  Widget _buildElevatedButton(BuildContext context) {
     return ElevatedButton(
       onPressed: isLoading ? null : onPressed,
       style: ElevatedButton.styleFrom(
@@ -46,6 +46,27 @@ class CustomButton extends StatelessWidget {
         foregroundColor: textColor,
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        elevation: 2,
+        disabledBackgroundColor: backgroundColor?.withOpacity(0.6),
+      ),
+      child: _buildChild(context),
+    );
+  }
+
+  Widget _buildOutlinedButton(BuildContext context) {
+    return OutlinedButton(
+      onPressed: isLoading ? null : onPressed,
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        side: BorderSide(
+          color: backgroundColor ?? Theme.of(context).primaryColor,
+          width: 2,
+        ),
+        disabledForegroundColor:
+            (backgroundColor ?? Theme.of(context).primaryColor).withOpacity(
+              0.4,
+            ),
       ),
       child: _buildChild(context),
     );
@@ -58,7 +79,9 @@ class CustomButton extends StatelessWidget {
         width: 20,
         child: CircularProgressIndicator(
           strokeWidth: 2,
-          color: textColor ?? Colors.white,
+          color: isOutlined
+              ? (backgroundColor ?? Theme.of(context).primaryColor)
+              : (textColor ?? Colors.white),
         ),
       );
     }
@@ -66,10 +89,28 @@ class CustomButton extends StatelessWidget {
     if (icon != null) {
       return Row(
         mainAxisSize: MainAxisSize.min,
-        children: [Icon(icon, size: 20), const SizedBox(width: 8), Text(text)],
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, size: 20),
+          const SizedBox(width: 8),
+          // ✅ FIX: Wrap text in Flexible to prevent overflow
+          Flexible(
+            child: Text(
+              text,
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+              textAlign: TextAlign.center,
+            ),
+          ),
+        ],
       );
     }
 
-    return Text(text);
+    return Text(
+      text,
+      overflow: TextOverflow.ellipsis,
+      maxLines: 1,
+      textAlign: TextAlign.center,
+    );
   }
 }
