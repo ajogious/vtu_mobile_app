@@ -1,0 +1,663 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:provider/provider.dart';
+import 'package:intl/intl.dart';
+import 'package:flutter_contacts/flutter_contacts.dart';
+import 'package:permission_handler/permission_handler.dart';
+import '../../providers/auth_provider.dart';
+import '../../providers/wallet_provider.dart';
+import '../../providers/network_provider.dart';
+import '../../providers/transaction_provider.dart';
+import '../widgets/network_selector.dart';
+import '../widgets/custom_button.dart';
+import '../widgets/custom_textfield.dart';
+import '../widgets/pin_verification_dialog.dart';
+import '../../utils/validators.dart';
+import '../../utils/ui_helpers.dart';
+import '../../services/storage_service.dart';
+import '../../models/transaction_model.dart';
+import 'airtime_success_screen.dart';
+
+class BuyAirtimeScreen extends StatefulWidget {
+  const BuyAirtimeScreen({super.key});
+
+  @override
+  State<BuyAirtimeScreen> createState() => _BuyAirtimeScreenState();
+}
+
+class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
+  final _formKey = GlobalKey<FormState>();
+  final _phoneController = TextEditingController();
+  final _amountController = TextEditingController();
+
+  String? _selectedNetwork;
+  bool _saveBeneficiary = false;
+  bool _isProcessing = false;
+
+  List<Map<String, String>> _beneficiaries = [];
+  List<Transaction> _recentTransactions = [];
+
+  final List<double> _quickAmounts = [50, 100, 200, 500, 1000];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBeneficiaries();
+    _loadRecentTransactions();
+  }
+
+  @override
+  void dispose() {
+    _phoneController.dispose();
+    _amountController.dispose();
+    super.dispose();
+  }
+
+  void _loadBeneficiaries() {
+    final storage = StorageService();
+    final beneficiaries = storage.getBeneficiaries();
+
+    if (beneficiaries['airtime'] != null) {
+      setState(() {
+        _beneficiaries = List<Map<String, String>>.from(
+          beneficiaries['airtime'].map((b) => Map<String, String>.from(b)),
+        );
+      });
+    }
+  }
+
+  void _loadRecentTransactions() {
+    final transactions = context
+        .read<TransactionProvider>()
+        .transactions
+        .where((t) => t.type == TransactionType.airtime)
+        .take(5)
+        .toList();
+
+    setState(() {
+      _recentTransactions = transactions;
+    });
+  }
+
+  Future<void> _saveBeneficiaryToStorage() async {
+    if (!_saveBeneficiary || _phoneController.text.trim().isEmpty) return;
+
+    final phone = _phoneController.text.trim();
+    final network = _selectedNetwork ?? '';
+
+    // Check if already exists
+    final exists = _beneficiaries.any((b) => b['phone'] == phone);
+    if (exists) return;
+
+    // Add new beneficiary
+    _beneficiaries.insert(0, {'phone': phone, 'network': network});
+
+    // Keep only last 10
+    if (_beneficiaries.length > 10) {
+      _beneficiaries = _beneficiaries.sublist(0, 10);
+    }
+
+    // Save to storage
+    final storage = StorageService();
+    final beneficiaries = storage.getBeneficiaries();
+    beneficiaries['airtime'] = _beneficiaries;
+    await storage.saveBeneficiaries(beneficiaries);
+  }
+
+  Future<void> _pickContact() async {
+    try {
+      // Step 1: Check and request permission
+      PermissionStatus status = await Permission.contacts.status;
+
+      print('Contact permission status: $status'); // Debug log
+
+      if (status.isDenied) {
+        status = await Permission.contacts.request();
+        print('After request, status: $status'); // Debug log
+      }
+
+      // Handle permanently denied
+      if (status.isPermanentlyDenied) {
+        if (!mounted) return;
+
+        final shouldOpenSettings = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Permission Required'),
+            content: const Text(
+              'Contact permission is required to pick a phone number. '
+              'Please enable it in app settings.',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(context, true),
+                child: const Text('Open Settings'),
+              ),
+            ],
+          ),
+        );
+
+        if (shouldOpenSettings == true) {
+          await openAppSettings();
+        }
+        return;
+      }
+
+      // If not granted, show error
+      if (!status.isGranted) {
+        if (!mounted) return;
+        UiHelpers.showSnackBar(
+          context,
+          'Contact permission is required to pick a number',
+          isError: true,
+        );
+        return;
+      }
+
+      print('Opening contact picker...'); // Debug log
+
+      // Step 2: Pick a contact (Method 1 - External Picker)
+      final contact = await FlutterContacts.openExternalPick();
+
+      print('Contact picked: ${contact?.id}'); // Debug log
+
+      if (contact == null) {
+        print('No contact selected'); // Debug log
+        return;
+      }
+
+      // Step 3: Fetch full contact details
+      final fullContact = await FlutterContacts.getContact(
+        contact.id,
+        withProperties: true,
+        withPhoto: false,
+      );
+
+      print(
+        'Full contact loaded: ${fullContact?.displayName}, phones: ${fullContact?.phones.length}',
+      ); // Debug log
+
+      if (fullContact == null) {
+        if (!mounted) return;
+        UiHelpers.showSnackBar(
+          context,
+          'Could not load contact details',
+          isError: true,
+        );
+        return;
+      }
+
+      if (fullContact.phones.isEmpty) {
+        if (!mounted) return;
+        UiHelpers.showSnackBar(
+          context,
+          'Selected contact has no phone number',
+          isError: true,
+        );
+        return;
+      }
+
+      // Step 4: Get and clean phone number
+      String phone = fullContact.phones.first.number;
+      print('Original phone: $phone'); // Debug log
+
+      // Clean phone number (remove spaces, dashes, parentheses)
+      phone = phone.replaceAll(RegExp(r'[\s\-\(\)\.]'), '');
+      print('Cleaned phone: $phone'); // Debug log
+
+      // Remove country code if present
+      if (phone.startsWith('+234')) {
+        phone = '0${phone.substring(4)}';
+      } else if (phone.startsWith('234')) {
+        phone = '0${phone.substring(3)}';
+      }
+
+      // Ensure it starts with 0
+      if (!phone.startsWith('0') && phone.length >= 10) {
+        phone = '0$phone';
+      }
+
+      // Limit to 11 digits
+      if (phone.length > 11) {
+        phone = phone.substring(0, 11);
+      }
+
+      print('Final phone: $phone'); // Debug log
+
+      if (mounted) {
+        setState(() {
+          _phoneController.text = phone;
+        });
+
+        UiHelpers.showSnackBar(
+          context,
+          'Contact added successfully',
+          isError: false,
+        );
+      }
+    } on Exception catch (e) {
+      print('Exception in _pickContact: $e'); // Debug log
+
+      if (!mounted) return;
+
+      String errorMessage = 'Failed to pick contact';
+
+      // Provide more specific error messages
+      if (e.toString().contains('PlatformException')) {
+        errorMessage = 'Error accessing contacts. Please try again.';
+      } else if (e.toString().contains('MissingPluginException')) {
+        errorMessage =
+            'Contact plugin not properly installed. Please restart the app.';
+      }
+
+      UiHelpers.showSnackBar(context, errorMessage, isError: true);
+    } catch (e) {
+      print('Error in _pickContact: $e'); // Debug log
+
+      if (!mounted) return;
+      UiHelpers.showSnackBar(
+        context,
+        'An unexpected error occurred',
+        isError: true,
+      );
+    }
+  }
+
+  void _setQuickAmount(double amount) {
+    _amountController.text = amount.toStringAsFixed(0);
+  }
+
+  void _selectBeneficiary(Map<String, String> beneficiary) {
+    setState(() {
+      _phoneController.text = beneficiary['phone'] ?? '';
+      _selectedNetwork = beneficiary['network'];
+    });
+  }
+
+  void _selectFromTransaction(Transaction transaction) {
+    setState(() {
+      _phoneController.text = transaction.beneficiary ?? '';
+      _selectedNetwork = transaction.network;
+      _amountController.text = transaction.amount.toStringAsFixed(0);
+    });
+  }
+
+  Future<void> _buyAirtime() async {
+    UiHelpers.dismissKeyboard(context);
+
+    if (!_formKey.currentState!.validate()) return;
+
+    if (_selectedNetwork == null) {
+      UiHelpers.showSnackBar(context, 'Please select a network', isError: true);
+      return;
+    }
+
+    // Check internet connection
+    final isOnline = context.read<NetworkProvider>().isOnline;
+    if (!isOnline) {
+      UiHelpers.showSnackBar(
+        context,
+        'No internet connection. Please check your network.',
+        isError: true,
+      );
+      return;
+    }
+
+    final phone = _phoneController.text.trim();
+    final amount = double.parse(_amountController.text.trim());
+
+    // Check balance
+    final balance = context.read<WalletProvider>().balance;
+    if (balance < amount) {
+      UiHelpers.showSnackBar(
+        context,
+        'Insufficient balance. Please fund your wallet.',
+        isError: true,
+      );
+      return;
+    }
+
+    // Verify PIN
+    final pinVerified = await showPinVerificationDialog(
+      context,
+      title: 'Confirm Purchase',
+      subtitle:
+          'Enter PIN to buy ₦${NumberFormat('#,##0').format(amount)} $_selectedNetwork airtime',
+    );
+
+    if (!pinVerified) {
+      UiHelpers.showSnackBar(context, 'Transaction cancelled', isError: true);
+      return;
+    }
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    // Call API
+    final authService = context.read<AuthProvider>().authService;
+    final result = await authService.api.buyAirtime(
+      network: _selectedNetwork!,
+      number: phone,
+      amount: amount,
+      pincode: '12345', // Already verified
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _isProcessing = false;
+    });
+
+    if (result.success && result.data != null) {
+      // Save beneficiary if checked
+      await _saveBeneficiaryToStorage();
+
+      // Update balance
+      final walletProvider = context.read<WalletProvider>();
+      walletProvider.deductBalance(amount);
+
+      // Create transaction
+      final transaction = Transaction(
+        id: result.data!['transaction_id'],
+        type: TransactionType.airtime,
+        network: _selectedNetwork!,
+        amount: amount,
+        status: TransactionStatus.success,
+        createdAt: DateTime.now(),
+        beneficiary: phone,
+        reference: result.data!['reference'],
+        balanceBefore: result.data!['balance'] + amount,
+        balanceAfter: result.data!['balance'],
+      );
+
+      // Add to history
+      context.read<TransactionProvider>().addTransaction(transaction);
+
+      // Navigate to success screen
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(
+          builder: (_) => AirtimeSuccessScreen(transaction: transaction),
+        ),
+      );
+    } else {
+      UiHelpers.showSnackBar(
+        context,
+        result.error ?? 'Purchase failed',
+        isError: true,
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final networkProvider = context.watch<NetworkProvider>();
+
+    return GestureDetector(
+      onTap: () => UiHelpers.dismissKeyboard(context),
+      child: Scaffold(
+        appBar: AppBar(title: const Text('Buy Airtime'), centerTitle: true),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                // Network offline warning
+                if (!networkProvider.isOnline)
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 16),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.red[50],
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red[200]!),
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(Icons.wifi_off, color: Colors.red[700], size: 20),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Text(
+                            'No internet connection. Purchase disabled.',
+                            style: TextStyle(
+                              color: Colors.red[900],
+                              fontSize: 13,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                // Network Selector
+                NetworkSelector(
+                  selectedNetwork: _selectedNetwork,
+                  onNetworkSelected: (network) {
+                    setState(() {
+                      _selectedNetwork = network;
+                    });
+                  },
+                ),
+                const SizedBox(height: 24),
+
+                // Phone Number with Contact Picker
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Expanded(
+                      child: CustomTextField(
+                        controller: _phoneController,
+                        labelText: 'Phone Number',
+                        hintText: '08012345678',
+                        prefixIcon: Icons.phone,
+                        keyboardType: TextInputType.phone,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
+                          LengthLimitingTextInputFormatter(11),
+                        ],
+                        validator: Validators.nigerianPhone,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Container(
+                      margin: const EdgeInsets.only(top: 0),
+                      child: IconButton(
+                        onPressed: _pickContact,
+                        icon: const Icon(Icons.contacts),
+                        tooltip: 'Pick from contacts',
+                        style: IconButton.styleFrom(
+                          backgroundColor: Theme.of(
+                            context,
+                          ).primaryColor.withOpacity(0.1),
+                          padding: const EdgeInsets.all(16),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Amount Input
+                CustomTextField(
+                  controller: _amountController,
+                  labelText: 'Amount',
+                  hintText: 'Enter amount',
+                  prefixIcon: Icons.money,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return 'Please enter amount';
+                    }
+                    final amount = double.tryParse(value.trim());
+                    if (amount == null || amount < 50) {
+                      return 'Minimum amount is ₦50';
+                    }
+                    if (amount > 10000) {
+                      return 'Maximum amount is ₦10,000';
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 16),
+
+                // Quick Amount Buttons
+                Text(
+                  'Quick Select',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: _quickAmounts.map((amount) {
+                    return OutlinedButton(
+                      onPressed: () => _setQuickAmount(amount),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                      ),
+                      child: Text('₦${NumberFormat('#,##0').format(amount)}'),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 16),
+
+                // Save Beneficiary
+                CheckboxListTile(
+                  value: _saveBeneficiary,
+                  onChanged: (value) {
+                    setState(() {
+                      _saveBeneficiary = value ?? false;
+                    });
+                  },
+                  title: const Text('Save as beneficiary'),
+                  contentPadding: EdgeInsets.zero,
+                  controlAffinity: ListTileControlAffinity.leading,
+                ),
+                const SizedBox(height: 24),
+
+                // Buy Button
+                CustomButton(
+                  text: 'Buy Airtime',
+                  onPressed: networkProvider.isOnline ? _buyAirtime : null,
+                  isLoading: _isProcessing,
+                ),
+                const SizedBox(height: 32),
+
+                // Beneficiaries
+                if (_beneficiaries.isNotEmpty) ...[
+                  Text(
+                    'Beneficiaries',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    height: 90,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: _beneficiaries.length,
+                      itemBuilder: (context, index) {
+                        final beneficiary = _beneficiaries[index];
+                        return _buildBeneficiaryCard(beneficiary);
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                ],
+
+                // Recent Transactions
+                if (_recentTransactions.isNotEmpty) ...[
+                  Text(
+                    'Recent Purchases',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._recentTransactions.map((transaction) {
+                    return _buildRecentTransactionCard(transaction);
+                  }),
+                  const SizedBox(height: 16),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBeneficiaryCard(Map<String, String> beneficiary) {
+    final phone = beneficiary['phone'] ?? '';
+    final network = beneficiary['network'] ?? '';
+
+    return GestureDetector(
+      onTap: () => _selectBeneficiary(beneficiary),
+      child: Container(
+        width: 120,
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          border: Border.all(color: Colors.grey[300]!),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.person, color: Theme.of(context).primaryColor, size: 24),
+            const SizedBox(height: 6),
+            Text(
+              phone,
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 2),
+            Text(
+              network,
+              style: TextStyle(fontSize: 10, color: Colors.grey[600]),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRecentTransactionCard(Transaction transaction) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: Colors.blue.withOpacity(0.1),
+          child: const Icon(Icons.phone_android, color: Colors.blue),
+        ),
+        title: Text(transaction.beneficiary ?? ''),
+        subtitle: Text(
+          '${transaction.network} • ₦${NumberFormat('#,##0').format(transaction.amount)}',
+          style: const TextStyle(fontSize: 12),
+        ),
+        trailing: IconButton(
+          icon: const Icon(Icons.arrow_forward, size: 20),
+          onPressed: () => _selectFromTransaction(transaction),
+        ),
+      ),
+    );
+  }
+}

@@ -1,3 +1,5 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
@@ -5,7 +7,13 @@ import '../../providers/auth_provider.dart';
 import '../../providers/network_provider.dart';
 import '../../providers/wallet_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../services/storage_service.dart';
+import '../../utils/ui_helpers.dart';
+import '../buy/buy_airtime_screen.dart';
+import '../buy/buy_data_screen.dart';
+import '../settings/set_pin_screen.dart';
 import '../wallet/wallet_screen.dart';
+import '../wallet/fund_wallet_screen.dart';
 import '../widgets/service_card.dart';
 import '../widgets/transaction_card.dart';
 import '../auth/login_screen.dart';
@@ -25,10 +33,60 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    // ✅ FIX: Use addPostFrameCallback to avoid build-time errors
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _initializeDashboard();
-    });
+    _initializeDashboard();
+    _checkPinSetup();
+  }
+
+  Future<void> _checkPinSetup() async {
+    await Future.delayed(const Duration(seconds: 1));
+
+    if (!mounted) return;
+
+    final hasPin = await StorageService().hasPin();
+
+    if (!hasPin && mounted) {
+      _showSetPinPrompt();
+    }
+  }
+
+  void _showSetPinPrompt() {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Text('Set Transaction PIN'),
+        content: const Text(
+          'For security, please set a 5-digit PIN to authorize transactions.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(context);
+            },
+            child: const Text('Later'),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(context);
+              final result = await Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const SetPinScreen(isFirstTime: true),
+                ),
+              );
+
+              if (result == true && mounted) {
+                UiHelpers.showSnackBar(
+                  context,
+                  'Transaction PIN set successfully',
+                );
+              }
+            },
+            child: const Text('Set PIN'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _initializeDashboard() async {
@@ -38,7 +96,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final transactionProvider = context.read<TransactionProvider>();
 
     await walletProvider.fetchBalance();
-    // await transactionProvider.fetchTransactions(page: 1, limit: 5);
     final success = await transactionProvider.fetchTransactions(
       page: 1,
       limit: 5,
@@ -345,9 +402,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Expanded(
                 child: ElevatedButton.icon(
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(
-                        content: Text('Fund Wallet - Coming in Day 9'),
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const FundWalletScreen(),
                       ),
                     );
                   },
@@ -401,8 +459,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           subtitle: 'Buy airtime',
           color: Colors.blue,
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Buy Airtime - Coming in Day 10')),
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BuyAirtimeScreen()),
             );
           },
         ),
@@ -412,8 +471,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           subtitle: 'Buy data bundles',
           color: Colors.green,
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Buy Data - Coming in Day 11')),
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BuyDataScreen()),
             );
           },
         ),

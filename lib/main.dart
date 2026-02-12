@@ -13,7 +13,6 @@ import 'screens/auth/splash_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // ✅ Lock to upright portrait only
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   await StorageService().init();
