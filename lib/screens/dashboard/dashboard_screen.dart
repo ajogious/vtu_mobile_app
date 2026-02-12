@@ -10,7 +10,10 @@ import '../../providers/transaction_provider.dart';
 import '../../services/storage_service.dart';
 import '../../utils/ui_helpers.dart';
 import '../buy/buy_airtime_screen.dart';
+import '../buy/buy_cable_screen.dart';
 import '../buy/buy_data_screen.dart';
+import '../buy/buy_electricity_screen.dart';
+import '../buy/buy_exam_pin_screen.dart';
 import '../settings/set_pin_screen.dart';
 import '../wallet/wallet_screen.dart';
 import '../wallet/fund_wallet_screen.dart';
@@ -483,8 +486,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           subtitle: 'Pay cable bills',
           color: Colors.purple,
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Cable TV - Coming in Day 12')),
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BuyCableScreen()),
             );
           },
         ),
@@ -494,8 +498,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           subtitle: 'Pay electric bills',
           color: Colors.orange,
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Electricity - Coming in Day 13')),
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BuyElectricityScreen()),
             );
           },
         ),
@@ -505,8 +510,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           subtitle: 'Buy exam pins',
           color: Colors.red,
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Exam Pins - Coming in Day 14')),
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BuyExamPinScreen()),
             );
           },
         ),
