@@ -693,7 +693,8 @@ class MockApiService implements ApiService {
       quantity,
       (index) => {
         'serial': 'DC${DateTime.now().millisecondsSinceEpoch}$index',
-        'pin': Random().nextInt(9999999999).toString().padLeft(10, '0'),
+        'pin':
+            '${Random().nextInt(99999).toString().padLeft(5, '0')}${Random().nextInt(99999).toString().padLeft(5, '0')}',
       },
     );
 

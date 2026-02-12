@@ -12,6 +12,7 @@ import '../../utils/ui_helpers.dart';
 import '../buy/buy_airtime_screen.dart';
 import '../buy/buy_cable_screen.dart';
 import '../buy/buy_data_screen.dart';
+import '../buy/buy_datacard_screen.dart';
 import '../buy/buy_electricity_screen.dart';
 import '../buy/buy_exam_pin_screen.dart';
 import '../settings/set_pin_screen.dart';
@@ -522,8 +523,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
           subtitle: 'Buy data cards',
           color: Colors.teal,
           onTap: () {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Data Cards - Coming in Day 15')),
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const BuyDatacardScreen()),
             );
           },
         ),
