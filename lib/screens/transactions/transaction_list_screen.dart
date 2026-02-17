@@ -4,6 +4,7 @@ import '../../providers/transaction_provider.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_retry.dart';
 import '../widgets/transaction_card.dart';
+import 'transaction_detail_screen.dart';
 import 'transaction_filter_screen.dart';
 
 class TransactionListScreen extends StatefulWidget {
@@ -243,11 +244,11 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                       return TransactionCard(
                         transaction: transaction,
                         onTap: () {
-                          // Navigate to detail screen (will implement in next task)
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Transaction Detail - Coming in Day 18',
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => TransactionDetailScreen(
+                                transaction: transaction,
                               ),
                             ),
                           );
