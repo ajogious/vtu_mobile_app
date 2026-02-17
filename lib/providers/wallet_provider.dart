@@ -23,7 +23,6 @@ class WalletProvider extends ChangeNotifier {
     final user = _storage.getUser();
     if (user != null) {
       _balance = user.balance;
-      notifyListeners();
     }
   }
 

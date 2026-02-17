@@ -15,7 +15,6 @@ class ThemeProvider extends ChangeNotifier {
   // Load theme preference from storage
   void _loadTheme() {
     _isDarkMode = _storage.getThemeMode();
-    notifyListeners();
   }
 
   // Toggle theme

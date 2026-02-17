@@ -9,10 +9,14 @@ import '../../providers/transaction_provider.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_textfield.dart';
 import '../widgets/pin_verification_dialog.dart';
+import '../widgets/loading_overlay.dart';
+import '../widgets/offline_banner.dart';
 import '../../utils/ui_helpers.dart';
+import '../../utils/error_handler.dart';
 import '../../config/app_constants.dart';
 import '../../services/storage_service.dart';
 import '../../models/transaction_model.dart';
+import '../../utils/app_formatters.dart';
 import 'electricity_success_screen.dart';
 
 class BuyElectricityScreen extends StatefulWidget {
@@ -110,7 +114,7 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
   }
 
   void _setQuickAmount(double amount) {
-    _amountController.text = amount.toStringAsFixed(0);
+    _amountController.text = NumberFormat('#,###').format(amount);
   }
 
   Future<void> _validateMeter() async {
@@ -195,7 +199,7 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
       _customerName = null;
       _customerAddress = null;
       _isValidated = false;
-      _amountController.text = transaction.amount.toStringAsFixed(0);
+      _amountController.text = NumberFormat('#,###').format(transaction.amount);
     });
 
     // Auto-validate
@@ -234,7 +238,9 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
       return;
     }
 
-    final amount = double.parse(_amountController.text.trim());
+    final amount = double.parse(
+      _amountController.text.replaceAll(',', '').trim(),
+    );
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -304,25 +310,19 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
     // Check internet connection
     final isOnline = context.read<NetworkProvider>().isOnline;
     if (!isOnline) {
-      UiHelpers.showSnackBar(
-        context,
-        'No internet connection. Please check your network.',
-        isError: true,
-      );
+      ErrorHandler.handleOfflineMode(context);
       return;
     }
 
     final meter = _meterController.text.trim();
-    final amount = double.parse(_amountController.text.trim());
+    final amount = double.parse(
+      _amountController.text.replaceAll(',', '').trim(),
+    );
 
     // Check balance
     final balance = context.read<WalletProvider>().balance;
     if (balance < amount) {
-      UiHelpers.showSnackBar(
-        context,
-        'Insufficient balance. Please fund your wallet.',
-        isError: true,
-      );
+      ErrorHandler.handleInsufficientBalance(context, balance, amount);
       return;
     }
 
@@ -397,11 +397,7 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
         ),
       );
     } else {
-      UiHelpers.showSnackBar(
-        context,
-        result.error ?? 'Purchase failed',
-        isError: true,
-      );
+      ErrorHandler.handleApiError(context, result.error ?? 'Purchase failed');
     }
   }
 
@@ -413,182 +409,131 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
       onTap: () => UiHelpers.dismissKeyboard(context),
       child: Scaffold(
         appBar: AppBar(title: const Text('Buy Electricity'), centerTitle: true),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Network offline warning
-                if (!networkProvider.isOnline)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red[200]!),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.wifi_off, color: Colors.red[700], size: 20),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'No internet connection. Purchase disabled.',
-                            style: TextStyle(
-                              color: Colors.red[900],
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+        body: LoadingOverlay(
+          isLoading: _isProcessing,
+          message: 'Processing electricity purchase...',
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Network offline warning
+                  OfflineBanner(isOffline: !networkProvider.isOnline),
 
-                // DISCO Selector
-                Text(
-                  'Select DISCO',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+                  // DISCO Selector
+                  Text(
+                    'Select DISCO',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: AppConstants.discos.map((disco) {
-                    final isSelected = _selectedDisco == disco;
-                    return ChoiceChip(
-                      label: Text(disco),
-                      selected: isSelected,
-                      onSelected: (selected) {
-                        if (selected) {
-                          setState(() {
-                            _selectedDisco = disco;
-                            _customerName = null;
-                            _customerAddress = null;
-                            _isValidated = false;
-                          });
-                        }
-                      },
-                      selectedColor: Theme.of(
-                        context,
-                      ).primaryColor.withOpacity(0.2),
-                      labelStyle: TextStyle(
-                        color: isSelected
-                            ? Theme.of(context).primaryColor
-                            : null,
-                        fontWeight: isSelected ? FontWeight.bold : null,
-                        fontSize: 12,
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: AppConstants.discos.map((disco) {
+                      final isSelected = _selectedDisco == disco;
+                      return ChoiceChip(
+                        label: Text(disco),
+                        selected: isSelected,
+                        onSelected: (selected) {
+                          if (selected) {
+                            setState(() {
+                              _selectedDisco = disco;
+                              _customerName = null;
+                              _customerAddress = null;
+                              _isValidated = false;
+                            });
+                          }
+                        },
+                        selectedColor: Theme.of(
+                          context,
+                        ).primaryColor.withOpacity(0.2),
+                        labelStyle: TextStyle(
+                          color: isSelected
+                              ? Theme.of(context).primaryColor
+                              : null,
+                          fontWeight: isSelected ? FontWeight.bold : null,
+                          fontSize: 12,
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Meter Type Selector
+                  Text(
+                    'Meter Type',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(child: _buildMeterTypeCard('Prepaid')),
+                      const SizedBox(width: 12),
+                      Expanded(child: _buildMeterTypeCard('Postpaid')),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Meter Number
+                  CustomTextField(
+                    controller: _meterController,
+                    labelText: 'Meter Number',
+                    hintText: 'Enter meter number',
+                    prefixIcon: Icons.electric_meter,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter meter number';
+                      }
+                      if (value.trim().length < 10) {
+                        return 'Meter number must be at least 10 digits';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Validate Button
+                  CustomButton(
+                    text: _isValidated ? 'Validated ✓' : 'Validate Meter',
+                    icon: _isValidated
+                        ? Icons.check_circle
+                        : Icons.verified_user,
+                    onPressed: _isValidated ? null : _validateMeter,
+                    isLoading: _isValidating,
+                    backgroundColor: _isValidated ? Colors.green : null,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Customer Details (after validation)
+                  if (_customerName != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.green[50],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.green[200]!),
                       ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 24),
-
-                // Meter Type Selector
-                Text(
-                  'Meter Type',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    Expanded(child: _buildMeterTypeCard('Prepaid')),
-                    const SizedBox(width: 12),
-                    Expanded(child: _buildMeterTypeCard('Postpaid')),
-                  ],
-                ),
-                const SizedBox(height: 24),
-
-                // Meter Number
-                CustomTextField(
-                  controller: _meterController,
-                  labelText: 'Meter Number',
-                  hintText: 'Enter meter number',
-                  prefixIcon: Icons.electric_meter,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter meter number';
-                    }
-                    if (value.trim().length < 10) {
-                      return 'Meter number must be at least 10 digits';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Validate Button
-                CustomButton(
-                  text: _isValidated ? 'Validated ✓' : 'Validate Meter',
-                  icon: _isValidated ? Icons.check_circle : Icons.verified_user,
-                  onPressed: _isValidated ? null : _validateMeter,
-                  isLoading: _isValidating,
-                  backgroundColor: _isValidated ? Colors.green : null,
-                ),
-                const SizedBox(height: 16),
-
-                // Customer Details (after validation)
-                if (_customerName != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.green[50],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.green[200]!),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.person, color: Colors.green[700]),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Customer Name',
-                                    style: TextStyle(
-                                      color: Colors.green[700],
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    _customerName!,
-                                    style: TextStyle(
-                                      color: Colors.green[900],
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 16,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                        if (_customerAddress != null) ...[
-                          const SizedBox(height: 12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
                           Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Icon(Icons.location_on, color: Colors.green[700]),
+                              Icon(Icons.person, color: Colors.green[700]),
                               const SizedBox(width: 12),
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Address',
+                                      'Customer Name',
                                       style: TextStyle(
                                         color: Colors.green[700],
                                         fontSize: 12,
@@ -596,10 +541,11 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      _customerAddress!,
+                                      _customerName!,
                                       style: TextStyle(
                                         color: Colors.green[900],
-                                        fontSize: 14,
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 16,
                                       ),
                                     ),
                                   ],
@@ -607,126 +553,169 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
                               ),
                             ],
                           ),
+                          if (_customerAddress != null) ...[
+                            const SizedBox(height: 12),
+                            Row(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Icon(
+                                  Icons.location_on,
+                                  color: Colors.green[700],
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        'Address',
+                                        style: TextStyle(
+                                          color: Colors.green[700],
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        _customerAddress!,
+                                        style: TextStyle(
+                                          color: Colors.green[900],
+                                          fontSize: 14,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
                         ],
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // Amount Input
+                  if (_isValidated) ...[
+                    CustomTextField(
+                      controller: _amountController,
+                      labelText: 'Amount',
+                      hintText: 'Enter amount',
+                      prefixIcon: Icons.money,
+                      keyboardType: TextInputType.number,
+                      inputFormatters: [
+                        FilteringTextInputFormatter.digitsOnly,
+                        ThousandsFormatter(),
                       ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
-
-                // Amount Input
-                if (_isValidated) ...[
-                  CustomTextField(
-                    controller: _amountController,
-                    labelText: 'Amount',
-                    hintText: 'Enter amount',
-                    prefixIcon: Icons.money,
-                    keyboardType: TextInputType.number,
-                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Please enter amount';
-                      }
-                      final amount = double.tryParse(value.trim());
-                      if (amount == null || amount < 1000) {
-                        return 'Minimum amount is ₦1,000';
-                      }
-                      if (amount > 50000) {
-                        return 'Maximum amount is ₦50,000';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Quick Amount Buttons
-                  Text(
-                    'Quick Select',
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: _quickAmounts.map((amount) {
-                      return OutlinedButton(
-                        onPressed: () => _setQuickAmount(amount),
-                        style: OutlinedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 16,
-                            vertical: 8,
-                          ),
-                        ),
-                        child: Text('₦${NumberFormat('#,##0').format(amount)}'),
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Save Beneficiary
-                  CheckboxListTile(
-                    value: _saveBeneficiary,
-                    onChanged: (value) {
-                      setState(() {
-                        _saveBeneficiary = value ?? false;
-                      });
-                    },
-                    title: const Text('Save as beneficiary'),
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Buy Button
-                  CustomButton(
-                    text: 'Continue',
-                    onPressed: networkProvider.isOnline
-                        ? _showConfirmationDialog
-                        : null,
-                    isLoading: _isProcessing,
-                  ),
-                  const SizedBox(height: 32),
-                ],
-
-                // Beneficiaries
-                if (_beneficiaries.isNotEmpty) ...[
-                  Text(
-                    'Beneficiaries',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 110,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _beneficiaries.length,
-                      itemBuilder: (context, index) {
-                        final beneficiary = _beneficiaries[index];
-                        return _buildBeneficiaryCard(beneficiary);
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter amount';
+                        }
+                        final amount = double.tryParse(
+                          value.replaceAll(',', '').trim(),
+                        );
+                        if (amount == null || amount < 1000) {
+                          return 'Minimum amount is ₦1,000';
+                        }
+                        if (amount > 50000) {
+                          return 'Maximum amount is ₦50,000';
+                        }
+                        return null;
                       },
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
+                    const SizedBox(height: 16),
 
-                // Recent Transactions
-                if (_recentTransactions.isNotEmpty) ...[
-                  Text(
-                    'Recent Purchases',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+                    // Quick Amount Buttons
+                    Text(
+                      'Quick Select',
+                      style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  ..._recentTransactions.map((transaction) {
-                    return _buildRecentTransactionCard(transaction);
-                  }),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: _quickAmounts.map((amount) {
+                        return OutlinedButton(
+                          onPressed: () => _setQuickAmount(amount),
+                          style: OutlinedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 8,
+                            ),
+                          ),
+                          child: Text(
+                            '₦${NumberFormat('#,##0').format(amount)}',
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Save Beneficiary
+                    CheckboxListTile(
+                      value: _saveBeneficiary,
+                      onChanged: (value) {
+                        setState(() {
+                          _saveBeneficiary = value ?? false;
+                        });
+                      },
+                      title: const Text('Save as beneficiary'),
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Buy Button
+                    CustomButton(
+                      text: 'Continue',
+                      onPressed: networkProvider.isOnline
+                          ? _showConfirmationDialog
+                          : null,
+                      isLoading: _isProcessing,
+                    ),
+                    const SizedBox(height: 32),
+                  ],
+
+                  // Beneficiaries
+                  if (_beneficiaries.isNotEmpty) ...[
+                    Text(
+                      'Beneficiaries',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 110,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _beneficiaries.length,
+                        itemBuilder: (context, index) {
+                          final beneficiary = _beneficiaries[index];
+                          return _buildBeneficiaryCard(beneficiary);
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // Recent Transactions
+                  if (_recentTransactions.isNotEmpty) ...[
+                    Text(
+                      'Recent Purchases',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ..._recentTransactions.map((transaction) {
+                      return _buildRecentTransactionCard(transaction);
+                    }),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

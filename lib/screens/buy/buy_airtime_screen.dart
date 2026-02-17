@@ -12,10 +12,14 @@ import '../widgets/network_selector.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_textfield.dart';
 import '../widgets/pin_verification_dialog.dart';
+import '../widgets/loading_overlay.dart';
+import '../widgets/offline_banner.dart';
 import '../../utils/validators.dart';
 import '../../utils/ui_helpers.dart';
+import '../../utils/error_handler.dart';
 import '../../services/storage_service.dart';
 import '../../models/transaction_model.dart';
+import '../../utils/app_formatters.dart';
 import 'airtime_success_screen.dart';
 
 class BuyAirtimeScreen extends StatefulWidget {
@@ -268,7 +272,7 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
   }
 
   void _setQuickAmount(double amount) {
-    _amountController.text = amount.toStringAsFixed(0);
+    _amountController.text = NumberFormat('#,###').format(amount);
   }
 
   void _selectBeneficiary(Map<String, String> beneficiary) {
@@ -282,11 +286,11 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
     setState(() {
       _phoneController.text = transaction.beneficiary ?? '';
       _selectedNetwork = transaction.network;
-      _amountController.text = transaction.amount.toStringAsFixed(0);
+      _amountController.text = NumberFormat('#,###').format(transaction.amount);
     });
   }
 
-  Future<void> _buyAirtime() async {
+  Future<void> _showConfirmationDialog() async {
     UiHelpers.dismissKeyboard(context);
 
     if (!_formKey.currentState!.validate()) return;
@@ -299,34 +303,92 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
     // Check internet connection
     final isOnline = context.read<NetworkProvider>().isOnline;
     if (!isOnline) {
-      UiHelpers.showSnackBar(
-        context,
-        'No internet connection. Please check your network.',
-        isError: true,
-      );
+      ErrorHandler.handleOfflineMode(context);
       return;
     }
 
     final phone = _phoneController.text.trim();
-    final amount = double.parse(_amountController.text.trim());
+    final amount = double.parse(
+      _amountController.text.replaceAll(',', '').trim(),
+    );
 
     // Check balance
     final balance = context.read<WalletProvider>().balance;
     if (balance < amount) {
-      UiHelpers.showSnackBar(
-        context,
-        'Insufficient balance. Please fund your wallet.',
-        isError: true,
-      );
+      ErrorHandler.handleInsufficientBalance(context, balance, amount);
       return;
     }
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirm Purchase'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            _buildConfirmRow('Network', _selectedNetwork!),
+            _buildConfirmRow('Phone Number', phone),
+            const Divider(height: 24),
+            _buildConfirmRow(
+              'Amount',
+              '₦${NumberFormat('#,##0.00').format(amount)}',
+              isBold: true,
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      _buyAirtime();
+    }
+  }
+
+  Widget _buildConfirmRow(String label, String value, {bool isBold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: const TextStyle(color: Colors.grey)),
+          Expanded(
+            child: Text(
+              value,
+              style: TextStyle(
+                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+                fontSize: isBold ? 16 : 14,
+              ),
+              textAlign: TextAlign.right,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _buyAirtime() async {
+    final phone = _phoneController.text.trim();
+    final amount = double.parse(
+      _amountController.text.replaceAll(',', '').trim(),
+    );
 
     // Verify PIN
     final pinVerified = await showPinVerificationDialog(
       context,
-      title: 'Confirm Purchase',
+      title: 'Enter PIN',
       subtitle:
-          'Enter PIN to buy ₦${NumberFormat('#,##0').format(amount)} $_selectedNetwork airtime',
+          'Authorize purchase of ₦${NumberFormat('#,##0').format(amount)} $_selectedNetwork airtime',
     );
 
     if (!pinVerified) {
@@ -344,7 +406,7 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
       network: _selectedNetwork!,
       number: phone,
       amount: amount,
-      pincode: '12345', // Already verified
+      pincode: '12345',
     );
 
     if (!mounted) return;
@@ -386,11 +448,7 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
         ),
       );
     } else {
-      UiHelpers.showSnackBar(
-        context,
-        result.error ?? 'Purchase failed',
-        isError: true,
-      );
+      ErrorHandler.handleApiError(context, result.error ?? 'Purchase failed');
     }
   }
 
@@ -402,198 +460,185 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
       onTap: () => UiHelpers.dismissKeyboard(context),
       child: Scaffold(
         appBar: AppBar(title: const Text('Buy Airtime'), centerTitle: true),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Network offline warning
-                if (!networkProvider.isOnline)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red[200]!),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.wifi_off, color: Colors.red[700], size: 20),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'No internet connection. Purchase disabled.',
-                            style: TextStyle(
-                              color: Colors.red[900],
-                              fontSize: 13,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+        body: LoadingOverlay(
+          isLoading: _isProcessing,
+          message: 'Processing airtime purchase...',
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Network offline warning
+                  OfflineBanner(isOffline: !networkProvider.isOnline),
 
-                // Network Selector
-                NetworkSelector(
-                  selectedNetwork: _selectedNetwork,
-                  onNetworkSelected: (network) {
-                    setState(() {
-                      _selectedNetwork = network;
-                    });
-                  },
-                ),
-                const SizedBox(height: 24),
-
-                // Phone Number with Contact Picker
-                Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Expanded(
-                      child: CustomTextField(
-                        controller: _phoneController,
-                        labelText: 'Phone Number',
-                        hintText: '08012345678',
-                        prefixIcon: Icons.phone,
-                        keyboardType: TextInputType.phone,
-                        inputFormatters: [
-                          FilteringTextInputFormatter.digitsOnly,
-                          LengthLimitingTextInputFormatter(11),
-                        ],
-                        validator: Validators.nigerianPhone,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Container(
-                      margin: const EdgeInsets.only(top: 0),
-                      child: IconButton(
-                        onPressed: _pickContact,
-                        icon: const Icon(Icons.contacts),
-                        tooltip: 'Pick from contacts',
-                        style: IconButton.styleFrom(
-                          backgroundColor: Theme.of(
-                            context,
-                          ).primaryColor.withOpacity(0.1),
-                          padding: const EdgeInsets.all(16),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // Amount Input
-                CustomTextField(
-                  controller: _amountController,
-                  labelText: 'Amount',
-                  hintText: 'Enter amount',
-                  prefixIcon: Icons.money,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter amount';
-                    }
-                    final amount = double.tryParse(value.trim());
-                    if (amount == null || amount < 50) {
-                      return 'Minimum amount is ₦50';
-                    }
-                    if (amount > 10000) {
-                      return 'Maximum amount is ₦10,000';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Quick Amount Buttons
-                Text(
-                  'Quick Select',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _quickAmounts.map((amount) {
-                    return OutlinedButton(
-                      onPressed: () => _setQuickAmount(amount),
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 16,
-                          vertical: 8,
-                        ),
-                      ),
-                      child: Text('₦${NumberFormat('#,##0').format(amount)}'),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-
-                // Save Beneficiary
-                CheckboxListTile(
-                  value: _saveBeneficiary,
-                  onChanged: (value) {
-                    setState(() {
-                      _saveBeneficiary = value ?? false;
-                    });
-                  },
-                  title: const Text('Save as beneficiary'),
-                  contentPadding: EdgeInsets.zero,
-                  controlAffinity: ListTileControlAffinity.leading,
-                ),
-                const SizedBox(height: 24),
-
-                // Buy Button
-                CustomButton(
-                  text: 'Buy Airtime',
-                  onPressed: networkProvider.isOnline ? _buyAirtime : null,
-                  isLoading: _isProcessing,
-                ),
-                const SizedBox(height: 32),
-
-                // Beneficiaries
-                if (_beneficiaries.isNotEmpty) ...[
-                  Text(
-                    'Beneficiaries',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 90,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _beneficiaries.length,
-                      itemBuilder: (context, index) {
-                        final beneficiary = _beneficiaries[index];
-                        return _buildBeneficiaryCard(beneficiary);
-                      },
-                    ),
+                  // Network Selector
+                  NetworkSelector(
+                    selectedNetwork: _selectedNetwork,
+                    onNetworkSelected: (network) {
+                      setState(() {
+                        _selectedNetwork = network;
+                      });
+                    },
                   ),
                   const SizedBox(height: 24),
-                ],
 
-                // Recent Transactions
-                if (_recentTransactions.isNotEmpty) ...[
+                  // Phone Number with Contact Picker
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: CustomTextField(
+                          controller: _phoneController,
+                          labelText: 'Phone Number',
+                          hintText: '08012345678',
+                          prefixIcon: Icons.phone,
+                          keyboardType: TextInputType.phone,
+                          inputFormatters: [
+                            FilteringTextInputFormatter.digitsOnly,
+                            LengthLimitingTextInputFormatter(11),
+                          ],
+                          validator: Validators.nigerianPhone,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Container(
+                        margin: const EdgeInsets.only(top: 0),
+                        child: IconButton(
+                          onPressed: _pickContact,
+                          icon: const Icon(Icons.contacts),
+                          tooltip: 'Pick from contacts',
+                          style: IconButton.styleFrom(
+                            backgroundColor: Theme.of(
+                              context,
+                            ).primaryColor.withOpacity(0.1),
+                            padding: const EdgeInsets.all(16),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Amount Input
+                  CustomTextField(
+                    controller: _amountController,
+                    labelText: 'Amount',
+                    hintText: 'Enter amount',
+                    prefixIcon: Icons.money,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      ThousandsFormatter(),
+                    ],
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter amount';
+                      }
+                      final amount = double.tryParse(
+                        value.replaceAll(',', '').trim(),
+                      );
+                      if (amount == null || amount < 50) {
+                        return 'Minimum amount is ₦50';
+                      }
+                      if (amount > 10000) {
+                        return 'Maximum amount is ₦10,000';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Quick Amount Buttons
                   Text(
-                    'Recent Purchases',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                    'Quick Select',
+                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                  const SizedBox(height: 12),
-                  ..._recentTransactions.map((transaction) {
-                    return _buildRecentTransactionCard(transaction);
-                  }),
+                  const SizedBox(height: 8),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: _quickAmounts.map((amount) {
+                      return OutlinedButton(
+                        onPressed: () => _setQuickAmount(amount),
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                        ),
+                        child: Text('₦${NumberFormat('#,##0').format(amount)}'),
+                      );
+                    }).toList(),
+                  ),
                   const SizedBox(height: 16),
+
+                  // Save Beneficiary
+                  CheckboxListTile(
+                    value: _saveBeneficiary,
+                    onChanged: (value) {
+                      setState(() {
+                        _saveBeneficiary = value ?? false;
+                      });
+                    },
+                    title: const Text('Save as beneficiary'),
+                    contentPadding: EdgeInsets.zero,
+                    controlAffinity: ListTileControlAffinity.leading,
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Buy Button
+                  CustomButton(
+                    text: 'Buy Airtime',
+                    onPressed: networkProvider.isOnline
+                        ? _showConfirmationDialog
+                        : null,
+                    isLoading: _isProcessing,
+                  ),
+                  const SizedBox(height: 32),
+
+                  // Beneficiaries
+                  if (_beneficiaries.isNotEmpty) ...[
+                    Text(
+                      'Beneficiaries',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 90,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _beneficiaries.length,
+                        itemBuilder: (context, index) {
+                          final beneficiary = _beneficiaries[index];
+                          return _buildBeneficiaryCard(beneficiary);
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // Recent Transactions
+                  if (_recentTransactions.isNotEmpty) ...[
+                    Text(
+                      'Recent Purchases',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ..._recentTransactions.map((transaction) {
+                      return _buildRecentTransactionCard(transaction);
+                    }),
+                    const SizedBox(height: 16),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

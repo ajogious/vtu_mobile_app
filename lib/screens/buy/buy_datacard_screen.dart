@@ -9,7 +9,10 @@ import '../widgets/network_selector.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_textfield.dart';
 import '../widgets/pin_verification_dialog.dart';
+import '../widgets/loading_overlay.dart';
+import '../widgets/offline_banner.dart';
 import '../../utils/ui_helpers.dart';
+import '../../utils/error_handler.dart';
 import '../../models/transaction_model.dart';
 import 'datacard_success_screen.dart';
 
@@ -151,22 +154,14 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
     // Check internet connection
     final isOnline = context.read<NetworkProvider>().isOnline;
     if (!isOnline) {
-      UiHelpers.showSnackBar(
-        context,
-        'No internet connection. Please check your network.',
-        isError: true,
-      );
+      ErrorHandler.handleOfflineMode(context);
       return;
     }
 
     // Check balance
     final balance = context.read<WalletProvider>().balance;
     if (balance < _totalAmount) {
-      UiHelpers.showSnackBar(
-        context,
-        'Insufficient balance. Please fund your wallet.',
-        isError: true,
-      );
+      ErrorHandler.handleInsufficientBalance(context, balance, _totalAmount);
       return;
     }
 
@@ -238,11 +233,7 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
         ),
       );
     } else {
-      UiHelpers.showSnackBar(
-        context,
-        result.error ?? 'Purchase failed',
-        isError: true,
-      );
+      ErrorHandler.handleApiError(context, result.error ?? 'Purchase failed');
     }
   }
 
@@ -254,205 +245,190 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
       onTap: () => UiHelpers.dismissKeyboard(context),
       child: Scaffold(
         appBar: AppBar(title: const Text('Buy Data Cards'), centerTitle: true),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Network offline warning
-                if (!networkProvider.isOnline)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red[200]!),
+        body: LoadingOverlay(
+          isLoading: _isProcessing,
+          message: 'Processing data card purchase...',
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Network offline warning
+                  OfflineBanner(isOffline: !networkProvider.isOnline),
+
+                  // Network Selector
+                  NetworkSelector(
+                    selectedNetwork: _selectedNetwork,
+                    onNetworkSelected: _onNetworkSelected,
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Denomination Selector
+                  if (_selectedNetwork != null) ...[
+                    Text(
+                      'Select Denomination',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.wifi_off, color: Colors.red[700], size: 20),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'No internet connection. Purchase disabled.',
+                    const SizedBox(height: 12),
+                    ..._availableDenominations.map((denomination) {
+                      return _buildDenominationCard(denomination);
+                    }),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // Name on Card
+                  if (_selectedDenomination != null) ...[
+                    CustomTextField(
+                      controller: _nameController,
+                      labelText: 'Name on Card',
+                      hintText: 'Enter name to print on card',
+                      prefixIcon: Icons.person,
+                      textCapitalization: TextCapitalization.words,
+                      validator: (value) {
+                        if (value == null || value.trim().isEmpty) {
+                          return 'Please enter name';
+                        }
+                        if (value.trim().length < 3) {
+                          return 'Name must be at least 3 characters';
+                        }
+                        return null;
+                      },
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Quantity Selector
+                    Text(
+                      'Quantity',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.grey[300]!),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          IconButton(
+                            onPressed: _quantity > 1
+                                ? () {
+                                    setState(() {
+                                      _quantity--;
+                                    });
+                                  }
+                                : null,
+                            icon: const Icon(Icons.remove_circle_outline),
+                            iconSize: 32,
+                          ),
+                          Column(
+                            children: [
+                              Text(
+                                '$_quantity',
+                                style: const TextStyle(
+                                  fontSize: 32,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              Text(
+                                'card${_quantity > 1 ? 's' : ''}',
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ],
+                          ),
+                          IconButton(
+                            onPressed: _quantity < 50
+                                ? () {
+                                    setState(() {
+                                      _quantity++;
+                                    });
+                                  }
+                                : null,
+                            icon: const Icon(Icons.add_circle_outline),
+                            iconSize: 32,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Maximum 50 cards per transaction',
+                      style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 32),
+
+                    // Total Amount Display
+                    Container(
+                      padding: const EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            Theme.of(context).primaryColor,
+                            Theme.of(
+                              context,
+                            ).primaryColor.withValues(alpha: 0.8),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                      child: Column(
+                        children: [
+                          const Text(
+                            'Total Amount',
                             style: TextStyle(
-                              color: Colors.red[900],
-                              fontSize: 13,
+                              color: Colors.white70,
+                              fontSize: 14,
                             ),
                           ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                // Network Selector
-                NetworkSelector(
-                  selectedNetwork: _selectedNetwork,
-                  onNetworkSelected: _onNetworkSelected,
-                ),
-                const SizedBox(height: 24),
-
-                // Denomination Selector
-                if (_selectedNetwork != null) ...[
-                  Text(
-                    'Select Denomination',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ..._availableDenominations.map((denomination) {
-                    return _buildDenominationCard(denomination);
-                  }),
-                  const SizedBox(height: 24),
-                ],
-
-                // Name on Card
-                if (_selectedDenomination != null) ...[
-                  CustomTextField(
-                    controller: _nameController,
-                    labelText: 'Name on Card',
-                    hintText: 'Enter name to print on card',
-                    prefixIcon: Icons.person,
-                    textCapitalization: TextCapitalization.words,
-                    validator: (value) {
-                      if (value == null || value.trim().isEmpty) {
-                        return 'Please enter name';
-                      }
-                      if (value.trim().length < 3) {
-                        return 'Name must be at least 3 characters';
-                      }
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 24),
-
-                  // Quantity Selector
-                  Text(
-                    'Quantity',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      border: Border.all(color: Colors.grey[300]!),
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        IconButton(
-                          onPressed: _quantity > 1
-                              ? () {
-                                  setState(() {
-                                    _quantity--;
-                                  });
-                                }
-                              : null,
-                          icon: const Icon(Icons.remove_circle_outline),
-                          iconSize: 32,
-                        ),
-                        Column(
-                          children: [
-                            Text(
-                              '$_quantity',
+                          const SizedBox(height: 8),
+                          FittedBox(
+                            fit: BoxFit.scaleDown,
+                            child: Text(
+                              '₦${NumberFormat('#,##0.00').format(_totalAmount)}',
                               style: const TextStyle(
-                                fontSize: 32,
+                                color: Colors.white,
+                                fontSize: 36,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            Text(
-                              'card${_quantity > 1 ? 's' : ''}',
-                              style: TextStyle(
-                                color: Colors.grey[600],
-                                fontSize: 14,
-                              ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '$_quantity card${_quantity > 1 ? 's' : ''} × ₦${NumberFormat('#,##0').format(_pricePerCard)}',
+                            style: const TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
                             ),
-                          ],
-                        ),
-                        IconButton(
-                          onPressed: _quantity < 50
-                              ? () {
-                                  setState(() {
-                                    _quantity++;
-                                  });
-                                }
-                              : null,
-                          icon: const Icon(Icons.add_circle_outline),
-                          iconSize: 32,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Maximum 50 cards per transaction',
-                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 32),
-
-                  // Total Amount Display
-                  Container(
-                    padding: const EdgeInsets.all(20),
-                    decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          Theme.of(context).primaryColor,
-                          Theme.of(context).primaryColor.withValues(alpha: 0.8),
+                          ),
                         ],
                       ),
-                      borderRadius: BorderRadius.circular(16),
                     ),
-                    child: Column(
-                      children: [
-                        const Text(
-                          'Total Amount',
-                          style: TextStyle(color: Colors.white70, fontSize: 14),
-                        ),
-                        const SizedBox(height: 8),
-                        FittedBox(
-                          fit: BoxFit.scaleDown,
-                          child: Text(
-                            '₦${NumberFormat('#,##0.00').format(_totalAmount)}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 36,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          '$_quantity card${_quantity > 1 ? 's' : ''} × ₦${NumberFormat('#,##0').format(_pricePerCard)}',
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 14,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 32),
+                    const SizedBox(height: 32),
 
-                  // Buy Button
-                  CustomButton(
-                    text: 'Continue',
-                    onPressed: networkProvider.isOnline
-                        ? _showConfirmationDialog
-                        : null,
-                    isLoading: _isProcessing,
-                  ),
+                    // Buy Button
+                    CustomButton(
+                      text: 'Continue',
+                      onPressed: networkProvider.isOnline
+                          ? _showConfirmationDialog
+                          : null,
+                      isLoading: _isProcessing,
+                    ),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

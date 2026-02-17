@@ -23,7 +23,6 @@ class AuthProvider extends ChangeNotifier {
   // Load user from storage on startup
   void _loadUser() {
     _user = _storage.getUser();
-    notifyListeners();
   }
 
   // Login

@@ -9,7 +9,12 @@ import '../../providers/transaction_provider.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_textfield.dart';
 import '../widgets/pin_verification_dialog.dart';
+import '../widgets/loading_overlay.dart';
+import '../widgets/offline_banner.dart';
+import '../widgets/empty_state.dart';
+import '../widgets/error_retry.dart';
 import '../../utils/ui_helpers.dart';
+import '../../utils/error_handler.dart';
 import '../../services/storage_service.dart';
 import '../../models/cable_plan_model.dart';
 import '../../models/transaction_model.dart';
@@ -35,6 +40,7 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
   bool _isValidated = false;
   bool _isLoadingPlans = false;
   bool _isProcessing = false;
+  String? _loadPlansError;
 
   List<CablePlan> _allPlans = [];
   List<CablePlan> _searchedPlans = [];
@@ -204,11 +210,9 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
         _searchedPlans = _allPlans;
       });
     } else {
-      UiHelpers.showSnackBar(
-        context,
-        result.error ?? 'Failed to load packages',
-        isError: true,
-      );
+      setState(() {
+        _loadPlansError = result.error ?? 'Failed to load packages';
+      });
     }
   }
 
@@ -349,11 +353,7 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
     // Check internet connection
     final isOnline = context.read<NetworkProvider>().isOnline;
     if (!isOnline) {
-      UiHelpers.showSnackBar(
-        context,
-        'No internet connection. Please check your network.',
-        isError: true,
-      );
+      ErrorHandler.handleOfflineMode(context);
       return;
     }
 
@@ -363,11 +363,7 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
     // Check balance
     final balance = context.read<WalletProvider>().balance;
     if (balance < amount) {
-      UiHelpers.showSnackBar(
-        context,
-        'Insufficient balance. Please fund your wallet.',
-        isError: true,
-      );
+      ErrorHandler.handleInsufficientBalance(context, balance, amount);
       return;
     }
 
@@ -443,11 +439,7 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
         ),
       );
     } else {
-      UiHelpers.showSnackBar(
-        context,
-        result.error ?? 'Purchase failed',
-        isError: true,
-      );
+      ErrorHandler.handleApiError(context, result.error ?? 'Purchase failed');
     }
   }
 
@@ -459,270 +451,257 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
       onTap: () => UiHelpers.dismissKeyboard(context),
       child: Scaffold(
         appBar: AppBar(title: const Text('Buy Cable TV'), centerTitle: true),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Network offline warning
-                if (!networkProvider.isOnline)
-                  Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.red[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red[200]!),
+        body: LoadingOverlay(
+          isLoading: _isProcessing,
+          message: 'Processing cable TV purchase...',
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Network offline warning
+                  OfflineBanner(isOffline: !networkProvider.isOnline),
+
+                  // Provider Selector
+                  Text(
+                    'Select Provider',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
                     ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.wifi_off, color: Colors.red[700], size: 20),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'No internet connection. Purchase disabled.',
-                            style: TextStyle(
-                              color: Colors.red[900],
-                              fontSize: 13,
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: _providers.map((provider) {
+                      return Expanded(child: _buildProviderCard(provider));
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Smartcard Number
+                  CustomTextField(
+                    controller: _smartcardController,
+                    labelText: 'Smartcard/IUC Number',
+                    hintText: 'Enter smartcard number',
+                    prefixIcon: Icons.credit_card,
+                    keyboardType: TextInputType.number,
+                    inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                    validator: (value) {
+                      if (value == null || value.trim().isEmpty) {
+                        return 'Please enter smartcard number';
+                      }
+                      if (value.trim().length < 10) {
+                        return 'Smartcard number must be at least 10 digits';
+                      }
+                      return null;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Validate Button
+                  CustomButton(
+                    text: _isValidated ? 'Validated ✓' : 'Validate Smartcard',
+                    icon: _isValidated
+                        ? Icons.check_circle
+                        : Icons.verified_user,
+                    onPressed: _isValidated ? null : _validateSmartcard,
+                    isLoading: _isValidating,
+                    backgroundColor: _isValidated ? Colors.green : null,
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Customer Name (after validation)
+                  if (_customerName != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.green[50],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.green[200]!),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.person, color: Colors.green[700]),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'Customer Name',
+                                  style: TextStyle(
+                                    color: Colors.green[700],
+                                    fontSize: 12,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  _customerName!,
+                                  style: TextStyle(
+                                    color: Colors.green[900],
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 16,
+                                  ),
+                                ),
+                              ],
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 24),
+                  ],
 
-                // Provider Selector
-                Text(
-                  'Select Provider',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: _providers.map((provider) {
-                    return Expanded(child: _buildProviderCard(provider));
-                  }).toList(),
-                ),
-                const SizedBox(height: 24),
-
-                // Smartcard Number
-                CustomTextField(
-                  controller: _smartcardController,
-                  labelText: 'Smartcard/IUC Number',
-                  hintText: 'Enter smartcard number',
-                  prefixIcon: Icons.credit_card,
-                  keyboardType: TextInputType.number,
-                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                  validator: (value) {
-                    if (value == null || value.trim().isEmpty) {
-                      return 'Please enter smartcard number';
-                    }
-                    if (value.trim().length < 10) {
-                      return 'Smartcard number must be at least 10 digits';
-                    }
-                    return null;
-                  },
-                ),
-                const SizedBox(height: 16),
-
-                // Validate Button
-                CustomButton(
-                  text: _isValidated ? 'Validated ✓' : 'Validate Smartcard',
-                  icon: _isValidated ? Icons.check_circle : Icons.verified_user,
-                  onPressed: _isValidated ? null : _validateSmartcard,
-                  isLoading: _isValidating,
-                  backgroundColor: _isValidated ? Colors.green : null,
-                ),
-                const SizedBox(height: 16),
-
-                // Customer Name (after validation)
-                if (_customerName != null) ...[
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.green[50],
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: Colors.green[200]!),
+                  // Search Bar
+                  if (_allPlans.isNotEmpty) ...[
+                    CustomTextField(
+                      controller: _searchController,
+                      labelText: 'Search Packages',
+                      hintText: 'Search by name, price, or duration',
+                      prefixIcon: Icons.search,
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear),
+                              onPressed: () {
+                                setState(() {
+                                  _searchController.clear();
+                                });
+                              },
+                            )
+                          : null,
                     ),
-                    child: Row(
+                    const SizedBox(height: 16),
+                  ],
+
+                  // Loading Plans
+                  if (_isLoadingPlans)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.all(32),
+                        child: CircularProgressIndicator(),
+                      ),
+                    ),
+
+                  // Cable Plans List
+                  if (!_isLoadingPlans && _searchedPlans.isNotEmpty) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Icon(Icons.person, color: Colors.green[700]),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Customer Name',
-                                style: TextStyle(
-                                  color: Colors.green[700],
-                                  fontSize: 12,
-                                ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                _customerName!,
-                                style: TextStyle(
-                                  color: Colors.green[900],
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 16,
-                                ),
-                              ),
-                            ],
+                        Text(
+                          'Select Package',
+                          style: Theme.of(context).textTheme.titleMedium
+                              ?.copyWith(fontWeight: FontWeight.bold),
+                        ),
+                        Text(
+                          '${_searchedPlans.length} package${_searchedPlans.length != 1 ? 's' : ''}',
+                          style: TextStyle(
+                            color: Colors.grey[600],
+                            fontSize: 12,
                           ),
                         ),
                       ],
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
+                    const SizedBox(height: 12),
+                    ..._searchedPlans.map((plan) => _buildPlanCard(plan)),
+                    const SizedBox(height: 16),
+                  ],
 
-                // Search Bar
-                if (_allPlans.isNotEmpty) ...[
-                  CustomTextField(
-                    controller: _searchController,
-                    labelText: 'Search Packages',
-                    hintText: 'Search by name, price, or duration',
-                    prefixIcon: Icons.search,
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear),
-                            onPressed: () {
-                              setState(() {
-                                _searchController.clear();
-                              });
-                            },
-                          )
-                        : null,
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                // Loading Plans
-                if (_isLoadingPlans)
-                  const Center(
-                    child: Padding(
-                      padding: EdgeInsets.all(32),
-                      child: CircularProgressIndicator(),
-                    ),
-                  ),
-
-                // Cable Plans List
-                if (!_isLoadingPlans && _searchedPlans.isNotEmpty) ...[
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Select Package',
-                        style: Theme.of(context).textTheme.titleMedium
-                            ?.copyWith(fontWeight: FontWeight.bold),
-                      ),
-                      Text(
-                        '${_searchedPlans.length} package${_searchedPlans.length != 1 ? 's' : ''}',
-                        style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  ..._searchedPlans.map((plan) => _buildPlanCard(plan)),
-                  const SizedBox(height: 16),
-                ],
-
-                // No plans message
-                if (!_isLoadingPlans &&
-                    _isValidated &&
-                    _searchedPlans.isEmpty &&
-                    _allPlans.isNotEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(24),
-                    child: Column(
-                      children: [
-                        Icon(Icons.inbox, size: 48, color: Colors.grey[400]),
-                        const SizedBox(height: 8),
-                        Text(
-                          'No packages found',
-                          style: TextStyle(color: Colors.grey[600]),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            setState(() {
-                              _searchController.clear();
-                            });
-                          },
-                          child: const Text('Clear search'),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                // Save Beneficiary
-                if (_selectedPlan != null)
-                  CheckboxListTile(
-                    value: _saveBeneficiary,
-                    onChanged: (value) {
-                      setState(() {
-                        _saveBeneficiary = value ?? false;
-                      });
-                    },
-                    title: const Text('Save as beneficiary'),
-                    contentPadding: EdgeInsets.zero,
-                    controlAffinity: ListTileControlAffinity.leading,
-                  ),
-
-                // Buy Button
-                if (_selectedPlan != null) ...[
-                  const SizedBox(height: 16),
-                  CustomButton(
-                    text:
-                        'Continue - ₦${NumberFormat('#,##0').format(_selectedPlan!.price)}',
-                    onPressed: networkProvider.isOnline
-                        ? _showConfirmationDialog
-                        : null,
-                    isLoading: _isProcessing,
-                  ),
-                ],
-                const SizedBox(height: 32),
-
-                // Beneficiaries
-                if (_beneficiaries.isNotEmpty) ...[
-                  Text(
-                    'Beneficiaries',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 100,
-                    child: ListView.builder(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _beneficiaries.length,
-                      itemBuilder: (context, index) {
-                        final beneficiary = _beneficiaries[index];
-                        return _buildBeneficiaryCard(beneficiary);
+                  // Error loading plans
+                  if (_loadPlansError != null && !_isLoadingPlans)
+                    ErrorRetry(
+                      message: _loadPlansError!,
+                      onRetry: () {
+                        setState(() => _loadPlansError = null);
+                        if (_selectedProvider != null)
+                          _loadCablePlans(_selectedProvider!);
                       },
                     ),
-                  ),
-                  const SizedBox(height: 24),
-                ],
 
-                // Recent Transactions
-                if (_recentTransactions.isNotEmpty) ...[
-                  Text(
-                    'Recent Purchases',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      fontWeight: FontWeight.bold,
+                  // No plans message
+                  if (!_isLoadingPlans &&
+                      _loadPlansError == null &&
+                      _isValidated &&
+                      _searchedPlans.isEmpty &&
+                      _allPlans.isNotEmpty)
+                    EmptyState(
+                      icon: Icons.inbox,
+                      title: 'No packages found',
+                      message: 'Try a different search term',
+                      actionText: 'Clear search',
+                      onAction: () {
+                        setState(() {
+                          _searchController.clear();
+                        });
+                      },
                     ),
-                  ),
-                  const SizedBox(height: 12),
-                  ..._recentTransactions.map((transaction) {
-                    return _buildRecentTransactionCard(transaction);
-                  }),
+
+                  // Save Beneficiary
+                  if (_selectedPlan != null)
+                    CheckboxListTile(
+                      value: _saveBeneficiary,
+                      onChanged: (value) {
+                        setState(() {
+                          _saveBeneficiary = value ?? false;
+                        });
+                      },
+                      title: const Text('Save as beneficiary'),
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                    ),
+
+                  // Buy Button
+                  if (_selectedPlan != null) ...[
+                    const SizedBox(height: 16),
+                    CustomButton(
+                      text:
+                          'Continue - ₦${NumberFormat('#,##0').format(_selectedPlan!.price)}',
+                      onPressed: networkProvider.isOnline
+                          ? _showConfirmationDialog
+                          : null,
+                      isLoading: _isProcessing,
+                    ),
+                  ],
+                  const SizedBox(height: 32),
+
+                  // Beneficiaries
+                  if (_beneficiaries.isNotEmpty) ...[
+                    Text(
+                      'Beneficiaries',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    SizedBox(
+                      height: 100,
+                      child: ListView.builder(
+                        scrollDirection: Axis.horizontal,
+                        itemCount: _beneficiaries.length,
+                        itemBuilder: (context, index) {
+                          final beneficiary = _beneficiaries[index];
+                          return _buildBeneficiaryCard(beneficiary);
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // Recent Transactions
+                  if (_recentTransactions.isNotEmpty) ...[
+                    Text(
+                      'Recent Purchases',
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    ..._recentTransactions.map((transaction) {
+                      return _buildRecentTransactionCard(transaction);
+                    }),
+                  ],
                 ],
-              ],
+              ),
             ),
           ),
         ),

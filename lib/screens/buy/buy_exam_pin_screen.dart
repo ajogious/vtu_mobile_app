@@ -8,7 +8,10 @@ import '../../providers/network_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/pin_verification_dialog.dart';
+import '../widgets/loading_overlay.dart';
+import '../widgets/offline_banner.dart';
 import '../../utils/ui_helpers.dart';
+import '../../utils/error_handler.dart';
 import '../../config/app_constants.dart';
 import '../../models/transaction_model.dart';
 import 'exam_pin_success_screen.dart';
@@ -105,22 +108,14 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
     // Check internet connection
     final isOnline = context.read<NetworkProvider>().isOnline;
     if (!isOnline) {
-      UiHelpers.showSnackBar(
-        context,
-        'No internet connection. Please check your network.',
-        isError: true,
-      );
+      ErrorHandler.handleOfflineMode(context);
       return;
     }
 
     // Check balance
     final balance = context.read<WalletProvider>().balance;
     if (balance < _totalAmount) {
-      UiHelpers.showSnackBar(
-        context,
-        'Insufficient balance. Please fund your wallet.',
-        isError: true,
-      );
+      ErrorHandler.handleInsufficientBalance(context, balance, _totalAmount);
       return;
     }
 
@@ -189,11 +184,7 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
         ),
       );
     } else {
-      UiHelpers.showSnackBar(
-        context,
-        result.error ?? 'Purchase failed',
-        isError: true,
-      );
+      ErrorHandler.handleApiError(context, result.error ?? 'Purchase failed');
     }
   }
 
@@ -205,198 +196,178 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
       onTap: () => UiHelpers.dismissKeyboard(context),
       child: Scaffold(
         appBar: AppBar(title: const Text('Buy Exam Pins'), centerTitle: true),
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Form(
-            key: _formKey,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Network offline warning
-                if (!networkProvider.isOnline)
+        body: LoadingOverlay(
+          isLoading: _isProcessing,
+          message: 'Processing exam pin purchase...',
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16),
+            child: Form(
+              key: _formKey,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Network offline warning
+                  OfflineBanner(isOffline: !networkProvider.isOnline),
+
+                  // Exam Type Selector
+                  Text(
+                    'Select Exam Type',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ...AppConstants.examTypes.map((exam) {
+                    return _buildExamTypeCard(exam);
+                  }),
+                  const SizedBox(height: 24),
+
+                  // Price Info
                   Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    padding: const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: Colors.red[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.red[200]!),
+                      color: Colors.blue[50],
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.wifi_off, color: Colors.red[700], size: 20),
+                        Icon(Icons.info_outline, color: Colors.blue[700]),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            'No internet connection. Purchase disabled.',
+                            'Price: ₦${NumberFormat('#,##0').format(_pricePerPin)} per pin',
                             style: TextStyle(
-                              color: Colors.red[900],
-                              fontSize: 13,
+                              color: Colors.blue[900],
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
                             ),
                           ),
                         ),
                       ],
                     ),
                   ),
+                  const SizedBox(height: 24),
 
-                // Exam Type Selector
-                Text(
-                  'Select Exam Type',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+                  // Quantity Selector
+                  Text(
+                    'Quantity',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                ...AppConstants.examTypes.map((exam) {
-                  return _buildExamTypeCard(exam);
-                }),
-                const SizedBox(height: 24),
-
-                // Price Info
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.blue[50],
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    children: [
-                      Icon(Icons.info_outline, color: Colors.blue[700]),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Text(
-                          'Price: ₦${NumberFormat('#,##0').format(_pricePerPin)} per pin',
-                          style: TextStyle(
-                            color: Colors.blue[900],
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      border: Border.all(color: Colors.grey[300]!),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        IconButton(
+                          onPressed: _quantity > 1
+                              ? () {
+                                  setState(() {
+                                    _quantity--;
+                                  });
+                                }
+                              : null,
+                          icon: const Icon(Icons.remove_circle_outline),
+                          iconSize: 32,
                         ),
-                      ),
-                    ],
+                        Column(
+                          children: [
+                            Text(
+                              '$_quantity',
+                              style: const TextStyle(
+                                fontSize: 32,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                            Text(
+                              'pin${_quantity > 1 ? 's' : ''}',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 14,
+                              ),
+                            ),
+                          ],
+                        ),
+                        IconButton(
+                          onPressed: _quantity < 50
+                              ? () {
+                                  setState(() {
+                                    _quantity++;
+                                  });
+                                }
+                              : null,
+                          icon: const Icon(Icons.add_circle_outline),
+                          iconSize: 32,
+                        ),
+                      ],
+                    ),
                   ),
-                ),
-                const SizedBox(height: 24),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Maximum 50 pins per transaction',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 32),
 
-                // Quantity Selector
-                Text(
-                  'Quantity',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey[300]!),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      IconButton(
-                        onPressed: _quantity > 1
-                            ? () {
-                                setState(() {
-                                  _quantity--;
-                                });
-                              }
-                            : null,
-                        icon: const Icon(Icons.remove_circle_outline),
-                        iconSize: 32,
-                      ),
-                      Column(
-                        children: [
-                          Text(
-                            '$_quantity',
-                            style: const TextStyle(
-                              fontSize: 32,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          Text(
-                            'pin${_quantity > 1 ? 's' : ''}',
-                            style: TextStyle(
-                              color: Colors.grey[600],
-                              fontSize: 14,
-                            ),
-                          ),
+                  // Total Amount Display
+                  Container(
+                    padding: const EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          Theme.of(context).primaryColor,
+                          Theme.of(context).primaryColor.withOpacity(0.8),
                         ],
                       ),
-                      IconButton(
-                        onPressed: _quantity < 50
-                            ? () {
-                                setState(() {
-                                  _quantity++;
-                                });
-                              }
-                            : null,
-                        icon: const Icon(Icons.add_circle_outline),
-                        iconSize: 32,
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  'Maximum 50 pins per transaction',
-                  style: TextStyle(color: Colors.grey[600], fontSize: 12),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 32),
-
-                // Total Amount Display
-                Container(
-                  padding: const EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [
-                        Theme.of(context).primaryColor,
-                        Theme.of(context).primaryColor.withOpacity(0.8),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Column(
+                      children: [
+                        const Text(
+                          'Total Amount',
+                          style: TextStyle(color: Colors.white70, fontSize: 14),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '₦${NumberFormat('#,##0.00').format(_totalAmount)}',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 36,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          '$_quantity pin${_quantity > 1 ? 's' : ''} × ₦${NumberFormat('#,##0').format(_pricePerPin)}',
+                          style: const TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
                       ],
                     ),
-                    borderRadius: BorderRadius.circular(16),
                   ),
-                  child: Column(
-                    children: [
-                      const Text(
-                        'Total Amount',
-                        style: TextStyle(color: Colors.white70, fontSize: 14),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        '₦${NumberFormat('#,##0.00').format(_totalAmount)}',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 36,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '$_quantity pin${_quantity > 1 ? 's' : ''} × ₦${NumberFormat('#,##0').format(_pricePerPin)}',
-                        style: const TextStyle(
-                          color: Colors.white70,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 32),
+                  const SizedBox(height: 32),
 
-                // Buy Button
-                CustomButton(
-                  text: 'Continue',
-                  onPressed: networkProvider.isOnline
-                      ? _showConfirmationDialog
-                      : null,
-                  isLoading: _isProcessing,
-                ),
-              ],
+                  // Buy Button
+                  CustomButton(
+                    text: 'Continue',
+                    onPressed: networkProvider.isOnline
+                        ? _showConfirmationDialog
+                        : null,
+                    isLoading: _isProcessing,
+                  ),
+                ],
+              ),
             ),
           ),
         ),
