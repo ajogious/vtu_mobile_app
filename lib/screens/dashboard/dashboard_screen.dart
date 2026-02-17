@@ -15,6 +15,7 @@ import '../buy/buy_data_screen.dart';
 import '../buy/buy_datacard_screen.dart';
 import '../buy/buy_electricity_screen.dart';
 import '../buy/buy_exam_pin_screen.dart';
+import '../referral/referral_screen.dart';
 import '../settings/set_pin_screen.dart';
 import '../transactions/transaction_list_screen.dart';
 import '../wallet/wallet_screen.dart';
@@ -225,10 +226,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 walletProvider.isLoading,
               ),
 
-              // KYC Prompt Banner - FIXED
+              // KYC Prompt Banner
               if (user != null && user.kycVerified == false) _buildKycPrompt(),
 
-              // Services Grid
+              // Services Grid + Referral
               Padding(
                 padding: const EdgeInsets.all(16),
                 child: Column(
@@ -242,6 +243,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     ),
                     const SizedBox(height: 16),
                     _buildServicesGrid(),
+                    const SizedBox(height: 16),
+                    _buildReferralCard(),
                   ],
                 ),
               ),
@@ -255,7 +258,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Update KYC Prompt to refresh better
   Widget _buildKycPrompt() {
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -268,16 +270,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
               MaterialPageRoute(builder: (_) => const KycScreen()),
             );
 
-            // Refresh user state if KYC was successful
             if (result == true && mounted) {
-              // Force refresh of auth provider
               final authProvider = context.read<AuthProvider>();
               final apiResult = await authProvider.authService.api.getMe();
               if (apiResult.success && apiResult.data != null) {
                 await authProvider.updateUser(apiResult.data!);
               }
-
-              // Also refresh dashboard
               _refreshDashboard();
             }
           },
@@ -449,6 +447,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // Only the 6 service tiles go inside the GridView now
   Widget _buildServicesGrid() {
     return GridView.count(
       shrinkWrap: true,
@@ -531,6 +530,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
           },
         ),
       ],
+    );
+  }
+
+  // Referral card lives outside the grid as a full-width banner
+  Widget _buildReferralCard() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const ReferralScreen()),
+          );
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.green.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.card_giftcard,
+                  color: Colors.green,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Refer & Earn',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Invite friends and earn rewards',
+                      style: TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
