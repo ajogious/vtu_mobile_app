@@ -43,7 +43,7 @@ abstract class ApiService {
 
   Future<ApiResult<User>> getMe();
 
-  Future<ApiResult<String>> updateProfile({
+  Future<ApiResult<User>> updateProfile({
     required String firstname,
     required String lastname,
     required String email,

@@ -160,13 +160,17 @@ class MockApiService implements ApiService {
   }
 
   @override
-  Future<ApiResult<String>> updateProfile({
+  Future<ApiResult<User>> updateProfile({
     required String firstname,
     required String lastname,
     required String email,
     required String phone,
   }) async {
     await _delay();
+
+    if (_currentUser == null) {
+      return ApiResult.failure('Not authenticated');
+    }
 
     _currentUser = _currentUser?.copyWith(
       firstname: firstname,
@@ -176,7 +180,7 @@ class MockApiService implements ApiService {
     );
 
     return ApiResult.success(
-      'Profile updated successfully',
+      _currentUser!,
       message: 'Your profile has been updated',
     );
   }

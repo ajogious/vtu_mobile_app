@@ -56,6 +56,7 @@ dependencies:
   provider: ^6.1.5+1
   permission_handler: ^12.0.1
   flutter_contacts: ^1.1.9+2
+  package_info_plus: ^9.0.0
 
 dev_dependencies:
   flutter_test:
@@ -73,4 +74,4 @@ flutter:
 pdf: ^3.10.7
 printing: ^5.12.0
 path_provider: ^2.1.1
-url_launcher: ^6.2.2
+package_info_plus: ^5.0.1

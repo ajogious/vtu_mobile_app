@@ -12,6 +12,14 @@ class StorageService {
   late SharedPreferences _prefs;
   FlutterSecureStorage? _secureStorage;
 
+  // ========== PREFERENCE KEYS ==========
+
+  static const String _notificationTransactions = 'notification_transactions';
+  static const String _notificationWallet = 'notification_wallet';
+  static const String _notificationReferrals = 'notification_referrals';
+  static const String _notificationPromotional = 'notification_promotional';
+  static const String _biometricEnabled = 'biometric_enabled';
+
   // Initialize storage
   Future<void> init() async {
     _prefs = await SharedPreferences.getInstance();
@@ -106,11 +114,11 @@ class StorageService {
 
   // Biometric preference
   Future<void> saveBiometricEnabled(bool enabled) async {
-    await _prefs.setBool('biometric_enabled', enabled);
+    await _prefs.setBool(_biometricEnabled, enabled);
   }
 
   bool getBiometricEnabled() {
-    return _prefs.getBool('biometric_enabled') ?? false;
+    return _prefs.getBool(_biometricEnabled) ?? false;
   }
 
   // First launch
@@ -138,6 +146,44 @@ class StorageService {
 
   String? getLastUsername() {
     return _prefs.getString('last_username');
+  }
+
+  // ========== NOTIFICATION PREFERENCES ==========
+
+  bool getNotificationPreference(String type) {
+    switch (type) {
+      case 'transactions':
+        return _prefs.getBool(_notificationTransactions) ?? true;
+      case 'wallet':
+        return _prefs.getBool(_notificationWallet) ?? true;
+      case 'referrals':
+        return _prefs.getBool(_notificationReferrals) ?? true;
+      case 'promotional':
+        return _prefs.getBool(_notificationPromotional) ?? false;
+      default:
+        return true;
+    }
+  }
+
+  Future<void> saveNotificationPreference(String type, bool value) async {
+    String key;
+    switch (type) {
+      case 'transactions':
+        key = _notificationTransactions;
+        break;
+      case 'wallet':
+        key = _notificationWallet;
+        break;
+      case 'referrals':
+        key = _notificationReferrals;
+        break;
+      case 'promotional':
+        key = _notificationPromotional;
+        break;
+      default:
+        return;
+    }
+    await _prefs.setBool(key, value);
   }
 
   // ========== BENEFICIARIES (Client-side only) ==========
