@@ -16,6 +16,7 @@ import '../buy/buy_datacard_screen.dart';
 import '../buy/buy_electricity_screen.dart';
 import '../buy/buy_exam_pin_screen.dart';
 import '../settings/set_pin_screen.dart';
+import '../transactions/transaction_list_screen.dart';
 import '../wallet/wallet_screen.dart';
 import '../wallet/fund_wallet_screen.dart';
 import '../widgets/service_card.dart';
@@ -550,9 +551,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
               ),
               TextButton(
                 onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Transaction List - Coming in Day 17'),
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const TransactionListScreen(),
                     ),
                   );
                 },

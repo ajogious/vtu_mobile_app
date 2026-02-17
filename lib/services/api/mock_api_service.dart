@@ -1093,6 +1093,19 @@ class MockApiService implements ApiService {
         reference: 'REF010',
         metadata: {'error': 'Insufficient balance'},
       ),
+      // 11. REFERRAL BONUS
+      Transaction(
+        id: 'TXN011',
+        type: TransactionType.referralBonus,
+        network: 'Referral',
+        amount: 500,
+        status: TransactionStatus.success,
+        createdAt: DateTime.now().subtract(const Duration(days: 9)),
+        beneficiary: 'Wallet',
+        reference: 'REF011',
+        balanceBefore: 11000,
+        balanceAfter: 11500,
+      ),
     ]);
   }
 }

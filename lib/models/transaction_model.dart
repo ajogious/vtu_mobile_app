@@ -8,6 +8,7 @@ enum TransactionType {
   walletFunding,
   atc,
   referralWithdrawal,
+  referralBonus,
 }
 
 enum TransactionStatus { success, pending, failed }
@@ -102,6 +103,8 @@ class Transaction {
       case 'referral':
       case 'referral_withdrawal':
         return TransactionType.referralWithdrawal;
+      case 'referral_bonus':
+        return TransactionType.referralBonus;
       default:
         return TransactionType.airtime;
     }
@@ -145,6 +148,8 @@ class Transaction {
         return 'Airtime to Cash';
       case TransactionType.referralWithdrawal:
         return 'Referral Withdrawal';
+      case TransactionType.referralBonus:
+        return 'Referral Bonus';
     }
   }
 }
