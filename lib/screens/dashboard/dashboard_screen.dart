@@ -9,6 +9,7 @@ import '../../providers/wallet_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../services/storage_service.dart';
 import '../../utils/ui_helpers.dart';
+import '../atc/atc_request_screen.dart';
 import '../buy/buy_airtime_screen.dart';
 import '../buy/buy_cable_screen.dart';
 import '../buy/buy_data_screen.dart';
@@ -244,6 +245,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(height: 16),
                     _buildServicesGrid(),
                     const SizedBox(height: 16),
+                    _buildAirtimeToCashCard(),
+                    const SizedBox(height: 12),
                     _buildReferralCard(),
                   ],
                 ),
@@ -530,6 +533,63 @@ class _DashboardScreenState extends State<DashboardScreen> {
           },
         ),
       ],
+    );
+  }
+
+  // Airtime to Cash card — full-width banner below the services grid
+  Widget _buildAirtimeToCashCard() {
+    return Card(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: InkWell(
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (_) => const AtcRequestScreen()),
+          );
+        },
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.pink.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.phone_callback,
+                  color: Colors.pink,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Airtime to Cash',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 15,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Convert airtime to cash instantly',
+                      style: TextStyle(fontSize: 13, color: Colors.grey),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(Icons.arrow_forward_ios, size: 16, color: Colors.grey),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
