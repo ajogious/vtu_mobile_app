@@ -3,21 +3,15 @@ import 'package:google_fonts/google_fonts.dart';
 
 class ThemeConfig {
   // Colors
-  static const Color primaryColor = Color(0xFFffd803);
-  static const Color secondaryColor = Color(0xFFbae8e8);
+  static const Color primaryColor = Color(0xFF6C63FF);
+  static const Color secondaryColor = Color(0xFF2ECC71);
   static const Color errorColor = Color(0xFFE74C3C);
   static const Color warningColor = Color(0xFFF39C12);
   static const Color successColor = Color(0xFF27AE60);
 
-  static const Color backgroundColor = Color(0xFFfffffe);
-  static const Color headlineColor = Color(0xFF272343);
-  static const Color paragraphColor = Color(0xFF2d334a);
-  static const Color accentColor = Color(0xFFffd803);
-  static const Color tertiaryColor = Color(0xFFe3f6f5);
-
-  static const Color darkBackground = Color(0xFF272343);
-  static const Color darkSurface = Color(0xFF272343);
-  static const Color darkCard = Color(0xFF2d334a);
+  static const Color darkBackground = Color(0xFF1A1A2E);
+  static const Color darkSurface = Color(0xFF16213E);
+  static const Color darkCard = Color(0xFF0F3460);
 
   // Light Theme
   static ThemeData get lightTheme {
@@ -25,29 +19,26 @@ class ThemeConfig {
       useMaterial3: true,
       brightness: Brightness.light,
       primaryColor: primaryColor,
-      scaffoldBackgroundColor: backgroundColor,
+      scaffoldBackgroundColor: Colors.grey[50],
 
       colorScheme: const ColorScheme.light(
         primary: primaryColor,
         secondary: secondaryColor,
         error: errorColor,
-        surface: backgroundColor,
+        surface: Colors.white,
       ),
 
-      textTheme: GoogleFonts.interTextTheme().apply(
-        bodyColor: headlineColor,
-        displayColor: headlineColor,
-      ),
+      textTheme: GoogleFonts.interTextTheme(),
 
       appBarTheme: AppBarTheme(
         elevation: 0,
         centerTitle: true,
-        backgroundColor: backgroundColor,
-        foregroundColor: headlineColor,
+        backgroundColor: Colors.white,
+        foregroundColor: Colors.black87,
         titleTextStyle: GoogleFonts.inter(
           fontSize: 18,
           fontWeight: FontWeight.w600,
-          color: headlineColor,
+          color: Colors.black87,
         ),
       ),
 
@@ -59,7 +50,7 @@ class ThemeConfig {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryColor,
-          foregroundColor: headlineColor,
+          foregroundColor: Colors.white,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           shape: RoundedRectangleBorder(
@@ -74,7 +65,7 @@ class ThemeConfig {
 
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: tertiaryColor,
+        fillColor: Colors.grey[100],
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
@@ -114,19 +105,17 @@ class ThemeConfig {
         surface: darkSurface,
       ),
 
-      textTheme: GoogleFonts.interTextTheme(
-        ThemeData.dark().textTheme,
-      ).apply(bodyColor: backgroundColor, displayColor: backgroundColor),
+      textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
 
       appBarTheme: AppBarTheme(
         elevation: 0,
         centerTitle: true,
         backgroundColor: darkSurface,
-        foregroundColor: backgroundColor,
+        foregroundColor: Colors.white,
         titleTextStyle: GoogleFonts.inter(
           fontSize: 18,
           fontWeight: FontWeight.w600,
-          color: backgroundColor,
+          color: Colors.white,
         ),
       ),
 
@@ -139,7 +128,7 @@ class ThemeConfig {
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
           backgroundColor: primaryColor,
-          foregroundColor: headlineColor,
+          foregroundColor: Colors.white,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           shape: RoundedRectangleBorder(

@@ -132,6 +132,23 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
       return;
     }
 
+    // Re-authentication for large amounts
+    if (_totalAmount >= 10000) {
+      final reAuthenticated = await requireReAuthentication(
+        context,
+        action: 'authorize this large transaction',
+      );
+
+      if (!reAuthenticated) {
+        UiHelpers.showSnackBar(
+          context,
+          'Re-authentication failed',
+          isError: true,
+        );
+        return;
+      }
+    }
+
     setState(() {
       _isProcessing = true;
     });
@@ -169,7 +186,7 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
         balanceAfter: result.data!['balance'],
         metadata: {
           'quantity': _quantity.toString(),
-          'pins': result.data!['pins'], // List of {serial, pin}
+          'pins': result.data!['pins'],
         },
       );
 

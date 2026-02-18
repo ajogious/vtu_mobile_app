@@ -396,6 +396,23 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
       return;
     }
 
+    // Re-authenticate for large transactions
+    if (amount >= 10000) {
+      final reAuthenticated = await requireReAuthentication(
+        context,
+        action: 'authorize this large transaction',
+      );
+
+      if (!reAuthenticated) {
+        UiHelpers.showSnackBar(
+          context,
+          'Re-authentication failed',
+          isError: true,
+        );
+        return;
+      }
+    }
+
     setState(() {
       _isProcessing = true;
     });
@@ -416,14 +433,11 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
     });
 
     if (result.success && result.data != null) {
-      // Save beneficiary if checked
       await _saveBeneficiaryToStorage();
 
-      // Update balance
       final walletProvider = context.read<WalletProvider>();
       walletProvider.deductBalance(amount);
 
-      // Create transaction
       final transaction = Transaction(
         id: result.data!['transaction_id'],
         type: TransactionType.airtime,
@@ -437,10 +451,8 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
         balanceAfter: result.data!['balance'],
       );
 
-      // Add to history
       context.read<TransactionProvider>().addTransaction(transaction);
 
-      // Navigate to success screen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(

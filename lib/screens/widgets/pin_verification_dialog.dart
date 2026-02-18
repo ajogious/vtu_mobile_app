@@ -1,17 +1,20 @@
-// ignore_for_file: unused_field
-
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../../services/biometric_service.dart';
 import '../../services/storage_service.dart';
-import '../widgets/pin_input.dart';
+import '../../utils/ui_helpers.dart';
 
 class PinVerificationDialog extends StatefulWidget {
-  final String title;
+  final String? title;
   final String? subtitle;
+  final bool allowBiometric;
 
   const PinVerificationDialog({
     super.key,
-    this.title = 'Enter PIN',
+    this.title,
     this.subtitle,
+    this.allowBiometric = true,
   });
 
   @override
@@ -19,113 +22,314 @@ class PinVerificationDialog extends StatefulWidget {
 }
 
 class _PinVerificationDialogState extends State<PinVerificationDialog> {
-  String _pin = '';
-  bool _isVerifying = false;
-  String? _error;
+  final _pinController = TextEditingController();
+  final _focusNode = FocusNode();
+  String _errorMessage = '';
+  bool _isLoading = false;
+  bool _biometricAvailable = false;
+  String _biometricLabel = 'Biometric';
+  IconData _biometricIcon = Icons.fingerprint;
 
-  void _onPinCompleted(String pin) async {
-    setState(() {
-      _pin = pin;
-      _isVerifying = true;
-      _error = null;
-    });
+  @override
+  void initState() {
+    super.initState();
+    _checkBiometricAvailability();
+  }
 
-    // Verify PIN
-    final isValid = await StorageService().verifyPin(pin);
+  @override
+  void dispose() {
+    _pinController.dispose();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  Future<void> _checkBiometricAvailability() async {
+    if (!widget.allowBiometric) return;
+
+    final isEnabled = BiometricService.isBiometricEnabled();
+    if (!isEnabled) return;
+
+    final canAuth = await BiometricService.canAuthenticate();
+    if (!canAuth) return;
+
+    final label = await BiometricService.getBiometricLabel();
+    final icon = await BiometricService.getBiometricIcon();
 
     if (!mounted) return;
 
+    setState(() {
+      _biometricAvailable = true;
+      _biometricLabel = label;
+      _biometricIcon = icon;
+    });
+
+    // Auto-trigger biometric
+    _tryBiometric();
+  }
+
+  Future<void> _tryBiometric() async {
+    if (!_biometricAvailable) return;
+
+    setState(() {
+      _isLoading = true;
+    });
+
+    final result = await BiometricService.authenticateForTransaction(
+      transactionDescription: widget.subtitle ?? 'Confirm transaction',
+    );
+
+    if (!mounted) return;
+
+    setState(() {
+      _isLoading = false;
+    });
+
+    switch (result) {
+      case BiometricResult.success:
+        Navigator.pop(context, true);
+        break;
+      case BiometricResult.cancelled:
+        // User cancelled, let them use PIN
+        break;
+      case BiometricResult.lockedOut:
+        setState(() {
+          _errorMessage = 'Biometric locked. Please use PIN.';
+        });
+        break;
+      case BiometricResult.notAvailable:
+      case BiometricResult.notEnrolled:
+        setState(() {
+          _biometricAvailable = false;
+        });
+        break;
+      default:
+        setState(() {
+          _errorMessage = 'Biometric failed. Please use PIN.';
+        });
+    }
+  }
+
+  Future<void> _verifyPin() async {
+    final pin = _pinController.text.trim();
+
+    if (pin.length < 5) {
+      setState(() {
+        _errorMessage = 'Please enter your 5-digit PIN';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    await Future.delayed(const Duration(milliseconds: 300));
+
+    if (!mounted) return;
+
+    final storage = StorageService();
+    final isValid = await storage.verifyPin(pin);
+
+    setState(() {
+      _isLoading = false;
+    });
+
     if (isValid) {
-      // PIN correct - return true
       Navigator.pop(context, true);
     } else {
-      // PIN incorrect
       setState(() {
-        _isVerifying = false;
-        _error = 'Incorrect PIN. Please try again.';
-        _pin = '';
+        _errorMessage = 'Incorrect PIN. Please try again.';
+        _pinController.clear();
       });
+      _focusNode.requestFocus();
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    return AlertDialog(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      title: Column(
-        children: [
-          Icon(Icons.lock, size: 60, color: Theme.of(context).primaryColor),
-          const SizedBox(height: 16),
-          Text(
-            widget.title,
-            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+    return PopScope(
+      canPop: false,
+      child: AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxHeight: MediaQuery.of(context).size.height * 0.6,
           ),
-          if (widget.subtitle != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              widget.subtitle!,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.grey[600],
-                fontWeight: FontWeight.normal,
-              ),
-              textAlign: TextAlign.center,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Icon
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).primaryColor.withOpacity(0.1),
+                    shape: BoxShape.circle,
+                  ),
+                  child: Icon(
+                    Icons.lock,
+                    color: Theme.of(context).primaryColor,
+                    size: 40,
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Title
+                Text(
+                  widget.title ?? 'Enter PIN',
+                  style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                if (widget.subtitle != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    widget.subtitle!,
+                    style: TextStyle(color: Colors.grey[600], fontSize: 14),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+                const SizedBox(height: 24),
+
+                // Biometric button (if available)
+                if (_biometricAvailable && !_isLoading) ...[
+                  OutlinedButton.icon(
+                    onPressed: _tryBiometric,
+                    icon: Icon(_biometricIcon),
+                    label: Text('Use $_biometricLabel'),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 24,
+                        vertical: 12,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  const Row(
+                    children: [
+                      Expanded(child: Divider()),
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16),
+                        child: Text(
+                          'or enter PIN',
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      ),
+                      Expanded(child: Divider()),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                ],
+
+                // Loading indicator
+                if (_isLoading) ...[
+                  const CircularProgressIndicator(),
+                  const SizedBox(height: 16),
+                ],
+
+                // PIN Input
+                if (!_isLoading) ...[
+                  TextField(
+                    controller: _pinController,
+                    focusNode: _focusNode,
+                    obscureText: true,
+                    keyboardType: TextInputType.number,
+                    textAlign: TextAlign.center,
+                    maxLength: 5,
+                    autofocus: !_biometricAvailable,
+                    inputFormatters: [
+                      FilteringTextInputFormatter.digitsOnly,
+                      LengthLimitingTextInputFormatter(5),
+                    ],
+                    decoration: InputDecoration(
+                      counterText: '',
+                      hintText: '•  •  •  •  •',
+                      hintStyle: TextStyle(
+                        color: Colors.grey[400],
+                        fontSize: 24,
+                        letterSpacing: 8,
+                      ),
+                      errorText: _errorMessage.isNotEmpty
+                          ? _errorMessage
+                          : null,
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    style: const TextStyle(fontSize: 24, letterSpacing: 8),
+                    onSubmitted: (_) => _verifyPin(),
+                    onChanged: (value) {
+                      if (_errorMessage.isNotEmpty) {
+                        setState(() {
+                          _errorMessage = '';
+                        });
+                      }
+                      if (value.length == 5) {
+                        _verifyPin();
+                      }
+                    },
+                  ),
+                ],
+              ],
             ),
-          ],
-        ],
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          PinInput(length: 5, obscureText: true, onCompleted: _onPinCompleted),
-          if (_error != null) ...[
-            const SizedBox(height: 16),
-            Text(
-              _error!,
-              style: const TextStyle(color: Colors.red, fontSize: 12),
-              textAlign: TextAlign.center,
-            ),
-          ],
-          if (_isVerifying) ...[
-            const SizedBox(height: 16),
-            const SizedBox(
-              width: 20,
-              height: 20,
-              child: CircularProgressIndicator(strokeWidth: 2),
-            ),
-          ],
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, false),
-          child: const Text('Cancel'),
+          ),
         ),
-      ],
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          if (!_isLoading)
+            ElevatedButton(onPressed: _verifyPin, child: const Text('Verify')),
+        ],
+      ),
     );
   }
 }
 
-// Helper function to show dialog
+/// Helper function to show PIN verification dialog
 Future<bool> showPinVerificationDialog(
   BuildContext context, {
-  String title = 'Enter PIN',
+  String? title,
   String? subtitle,
+  bool allowBiometric = true,
 }) async {
-  // Check if PIN is set
-  final hasPin = await StorageService().hasPin();
+  final storage = StorageService();
 
-  if (!hasPin) {
-    // No PIN set - return true (allow action)
-    return true;
+  // Check if PIN has been set
+  if (!await storage.hasPin()) {
+    UiHelpers.showSnackBar(
+      context,
+      'Please set a PIN first in Settings',
+      isError: true,
+    );
+    return false;
   }
 
   final result = await showDialog<bool>(
     context: context,
     barrierDismissible: false,
-    builder: (context) =>
-        PinVerificationDialog(title: title, subtitle: subtitle),
+    builder: (context) => PinVerificationDialog(
+      title: title,
+      subtitle: subtitle,
+      allowBiometric: allowBiometric,
+    ),
   );
 
   return result ?? false;
+}
+
+/// Helper for sensitive actions (re-authentication)
+Future<bool> requireReAuthentication(
+  BuildContext context, {
+  required String action,
+}) async {
+  return showPinVerificationDialog(
+    context,
+    title: 'Security Check',
+    subtitle: 'Re-enter your PIN to $action',
+    allowBiometric: true,
+  );
 }

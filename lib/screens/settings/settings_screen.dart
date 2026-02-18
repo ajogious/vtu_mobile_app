@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/app_lock_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/storage_service.dart';
 import '../../utils/ui_helpers.dart';
@@ -23,6 +24,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _walletAlerts = true;
   bool _referralNotifications = true;
   bool _promotionalMessages = false;
+  AutoLockDuration _autoLockDuration = AutoLockDuration.oneMinute;
   String _appVersion = '';
 
   @override
@@ -43,6 +45,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       _walletAlerts = storage.getNotificationPreference('wallet');
       _referralNotifications = storage.getNotificationPreference('referrals');
       _promotionalMessages = storage.getNotificationPreference('promotional');
+      _autoLockDuration = context.read<AppLockProvider>().autoLockDuration;
     });
   }
 
@@ -87,6 +90,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
           break;
       }
     });
+  }
+
+  void _showAutoLockOptions() {
+    final lockProvider = context.read<AppLockProvider>();
+
+    showModalBottomSheet(
+      context: context,
+      builder: (context) => Container(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            const Text(
+              'Auto-Lock Timer',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            ...AutoLockDuration.values.map((duration) {
+              final isSelected = _autoLockDuration == duration;
+              return ListTile(
+                title: Text(lockProvider.getAutoLockLabel(duration)),
+                trailing: isSelected
+                    ? Icon(Icons.check, color: Theme.of(context).primaryColor)
+                    : null,
+                onTap: () async {
+                  await lockProvider.setAutoLockDuration(duration);
+                  setState(() {
+                    _autoLockDuration = duration;
+                  });
+                  if (mounted) Navigator.pop(context);
+                },
+              );
+            }),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _logout() async {
@@ -167,6 +208,17 @@ class _SettingsScreenState extends State<SettingsScreen> {
             secondary: const Icon(Icons.fingerprint),
             value: _biometricEnabled,
             onChanged: _toggleBiometric,
+          ),
+          ListTile(
+            leading: const Icon(Icons.timer),
+            title: const Text('Auto-Lock Timer'),
+            subtitle: Text(
+              context.read<AppLockProvider>().getAutoLockLabel(
+                _autoLockDuration,
+              ),
+            ),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: _showAutoLockOptions,
           ),
           const Divider(),
 

@@ -338,6 +338,23 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
       return;
     }
 
+    // Re-authentication for large amounts
+    if (amount >= 10000) {
+      final reAuthenticated = await requireReAuthentication(
+        context,
+        action: 'authorize this large transaction',
+      );
+
+      if (!reAuthenticated) {
+        UiHelpers.showSnackBar(
+          context,
+          'Re-authentication failed',
+          isError: true,
+        );
+        return;
+      }
+    }
+
     setState(() {
       _isProcessing = true;
     });

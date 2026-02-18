@@ -19,6 +19,7 @@ class StorageService {
   static const String _notificationReferrals = 'notification_referrals';
   static const String _notificationPromotional = 'notification_promotional';
   static const String _biometricEnabled = 'biometric_enabled';
+  static const String _autoLockDuration = 'auto_lock_duration';
 
   // Initialize storage
   Future<void> init() async {
@@ -119,6 +120,15 @@ class StorageService {
 
   bool getBiometricEnabled() {
     return _prefs.getBool(_biometricEnabled) ?? false;
+  }
+
+  // Auto-lock duration (stored as index: 0=30s, 1=1min, 2=2min, etc.)
+  int getAutoLockDuration() {
+    return _prefs.getInt(_autoLockDuration) ?? 1; // Default: 1 minute
+  }
+
+  Future<void> saveAutoLockDuration(int index) async {
+    await _prefs.setInt(_autoLockDuration, index);
   }
 
   // First launch

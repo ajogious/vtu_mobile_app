@@ -12,6 +12,7 @@ import '../widgets/custom_textfield.dart';
 import '../../utils/validators.dart';
 import '../../utils/ui_helpers.dart';
 import '../../models/transaction_model.dart';
+import '../widgets/pin_verification_dialog.dart';
 
 class AtcRequestScreen extends StatefulWidget {
   const AtcRequestScreen({super.key});
@@ -228,6 +229,26 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
     });
 
     try {
+      // Re-authentication for large amounts
+      if (_airtimeAmount >= 10000) {
+        final reAuthenticated = await requireReAuthentication(
+          context,
+          action: 'authorize this large transaction',
+        );
+
+        if (!reAuthenticated) {
+          setState(() {
+            _isProcessing = false;
+          });
+          UiHelpers.showSnackBar(
+            context,
+            'Re-authentication failed',
+            isError: true,
+          );
+          return;
+        }
+      }
+
       final user = context.read<AuthProvider>().user;
       final transaction = Transaction(
         id: 'ATC${DateTime.now().millisecondsSinceEpoch}',

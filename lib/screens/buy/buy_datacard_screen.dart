@@ -178,6 +178,23 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
       return;
     }
 
+    // Re-authentication for large amounts
+    if (_totalAmount >= 10000) {
+      final reAuthenticated = await requireReAuthentication(
+        context,
+        action: 'authorize this large transaction',
+      );
+
+      if (!reAuthenticated) {
+        UiHelpers.showSnackBar(
+          context,
+          'Re-authentication failed',
+          isError: true,
+        );
+        return;
+      }
+    }
+
     setState(() {
       _isProcessing = true;
     });
@@ -218,7 +235,7 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
           'denomination': _selectedDenomination!,
           'quantity': _quantity.toString(),
           'name_on_card': _nameController.text.trim(),
-          'pins': result.data!['pins'], // List of {serial, pin}
+          'pins': result.data!['pins'],
         },
       );
 
