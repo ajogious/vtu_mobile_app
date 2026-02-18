@@ -43,6 +43,12 @@ class AppConstants {
   static const List<String> airtelDataTypes = ['CG'];
   static const List<String> nineMobileDataTypes = ['GIFTING'];
 
+  // Amount Limits
+  static const double minAirtimeAmount = 50;
+  static const double maxAirtimeAmount = 10000;
+  static const double minElectricityAmount = 1000;
+  static const double maxElectricityAmount = 50000;
+
   // Quick Airtime Amounts
   static const List<double> quickAirtimeAmounts = [
     50,
