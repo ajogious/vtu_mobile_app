@@ -1,8 +1,9 @@
 import 'package:flutter/foundation.dart';
 import '../models/transaction_model.dart';
+import '../services/cache_service.dart';
 
 class TransactionProvider with ChangeNotifier {
-  final List<Transaction> _transactions = [];
+  List<Transaction> _transactions = [];
   List<Transaction> _filteredTransactions = [];
   bool _isLoading = false;
   final bool _hasMore = true;
@@ -46,6 +47,9 @@ class TransactionProvider with ChangeNotifier {
   void addTransaction(Transaction transaction) {
     _transactions.insert(0, transaction);
     _applyFilters();
+
+    // Update cache with new transaction at the top
+    CacheService.cacheTransactions(_transactions);
     notifyListeners();
   }
 
@@ -64,12 +68,21 @@ class TransactionProvider with ChangeNotifier {
     }
 
     try {
-      // In real app, call API here
-      // For now, transactions are added via addTransaction()
+      // Load from cache immediately for instant display on first load
+      if (!loadMore) {
+        final cached = CacheService.getCachedTransactions();
+        if (cached != null && _transactions.isEmpty) {
+          _transactions = cached;
+          _applyFilters();
+          notifyListeners();
+        }
+      }
 
-      await Future.delayed(
-        const Duration(milliseconds: 500),
-      ); // Simulate API call
+      // Simulate API call — replace with real API call when ready
+      await Future.delayed(const Duration(milliseconds: 500));
+
+      // Cache the latest transactions after a successful fetch
+      await CacheService.cacheTransactions(_transactions);
 
       _isLoading = false;
       _applyFilters();
@@ -191,6 +204,13 @@ class TransactionProvider with ChangeNotifier {
 
       return true;
     }).toList();
+  }
+
+  /// Populate the provider from a cached list of transactions (used when offline).
+  void loadFromCache(List<Transaction> cached) {
+    _transactions = cached;
+    _applyFilters();
+    notifyListeners();
   }
 
   void clearTransactions() {

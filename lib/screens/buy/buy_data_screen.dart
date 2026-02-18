@@ -8,12 +8,15 @@ import '../../providers/auth_provider.dart';
 import '../../providers/wallet_provider.dart';
 import '../../providers/network_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../services/cache_service.dart';
 import '../widgets/network_selector.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_textfield.dart';
 import '../widgets/pin_verification_dialog.dart';
 import '../widgets/loading_overlay.dart';
 import '../widgets/offline_banner.dart';
+import '../widgets/offline_purchase_blocker.dart';
+import '../widgets/cached_data_badge.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_retry.dart';
 import '../../utils/validators.dart';
@@ -43,6 +46,7 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
   bool _isLoadingPlans = false;
   bool _isProcessing = false;
   String? _loadPlansError;
+  bool _plansFromCache = false;
 
   List<DataPlan> _allPlans = [];
   List<DataPlan> _filteredPlans = [];
@@ -120,14 +124,12 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
 
   Future<void> _pickContact() async {
     try {
-      // Step 1: Check and request permission
       PermissionStatus status = await Permission.contacts.status;
 
       if (status.isDenied) {
         status = await Permission.contacts.request();
       }
 
-      // Handle permanently denied
       if (status.isPermanentlyDenied) {
         if (!mounted) return;
 
@@ -158,7 +160,6 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
         return;
       }
 
-      // If not granted, show error
       if (!status.isGranted) {
         if (!mounted) return;
         UiHelpers.showSnackBar(
@@ -169,14 +170,9 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
         return;
       }
 
-      // Step 2: Pick a contact (External Picker)
       final contact = await FlutterContacts.openExternalPick();
+      if (contact == null) return;
 
-      if (contact == null) {
-        return;
-      }
-
-      // Step 3: Fetch full contact details
       final fullContact = await FlutterContacts.getContact(
         contact.id,
         withProperties: true,
@@ -203,25 +199,19 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
         return;
       }
 
-      // Step 4: Get and clean phone number
       String phone = fullContact.phones.first.number;
-
-      // Clean phone number (remove spaces, dashes, parentheses)
       phone = phone.replaceAll(RegExp(r'[\s\-\(\)\.]'), '');
 
-      // Remove country code if present
       if (phone.startsWith('+234')) {
         phone = '0${phone.substring(4)}';
       } else if (phone.startsWith('234')) {
         phone = '0${phone.substring(3)}';
       }
 
-      // Ensure it starts with 0
       if (!phone.startsWith('0') && phone.length >= 10) {
         phone = '0$phone';
       }
 
-      // Limit to 11 digits
       if (phone.length > 11) {
         phone = phone.substring(0, 11);
       }
@@ -230,18 +220,12 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
         setState(() {
           _phoneController.text = phone;
         });
-
-        UiHelpers.showSnackBar(
-          context,
-          'Contact added successfully',
-          isError: false,
-        );
+        UiHelpers.showSnackBar(context, 'Contact added successfully');
       }
     } on Exception catch (e) {
       if (!mounted) return;
 
       String errorMessage = 'Failed to pick contact';
-
       if (e.toString().contains('PlatformException')) {
         errorMessage = 'Error accessing contacts. Please try again.';
       } else if (e.toString().contains('MissingPluginException')) {
@@ -275,6 +259,32 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
   }
 
   Future<void> _loadDataPlans(String network) async {
+    final isOnline = context.read<NetworkProvider>().isOnline;
+
+    // Try cache first when offline
+    final cachedPlans = CacheService.getCachedDataPlans(network);
+
+    if (!isOnline) {
+      if (cachedPlans != null) {
+        setState(() {
+          _plansFromCache = true;
+          _allPlans = cachedPlans;
+          _dataTypes = _allPlans.map((p) => p.type).toSet().toList();
+          if (_dataTypes.isNotEmpty) {
+            _selectedDataType = _dataTypes.first;
+            _filterPlansByType(_selectedDataType!);
+          }
+        });
+      } else {
+        UiHelpers.showSnackBar(
+          context,
+          'No internet and no cached plans available',
+          isError: true,
+        );
+      }
+      return;
+    }
+
     setState(() {
       _isLoadingPlans = true;
     });
@@ -289,30 +299,28 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
     });
 
     if (result.success && result.data != null) {
+      // Parse plans for the selected network
+      final networkData = result.data![network] as Map<String, dynamic>?;
+      final parsedPlans = <DataPlan>[];
+
+      if (networkData != null) {
+        networkData.forEach((type, plans) {
+          final planList = plans as List;
+          for (final plan in planList) {
+            parsedPlans.add(
+              DataPlan.fromJson(Map<String, dynamic>.from(plan), network, type),
+            );
+          }
+        });
+      }
+
+      // Cache parsed plans for offline use
+      await CacheService.cacheDataPlans(network, parsedPlans);
+
       setState(() {
-        // Parse plans from the nested map for the selected network
-        final networkData = result.data![network] as Map<String, dynamic>?;
-        _allPlans = [];
-
-        if (networkData != null) {
-          networkData.forEach((type, plans) {
-            final planList = plans as List;
-            for (final plan in planList) {
-              _allPlans.add(
-                DataPlan.fromJson(
-                  Map<String, dynamic>.from(plan),
-                  network,
-                  type,
-                ),
-              );
-            }
-          });
-        }
-
-        // Extract unique data types
+        _plansFromCache = false;
+        _allPlans = parsedPlans;
         _dataTypes = _allPlans.map((plan) => plan.type).toSet().toList();
-
-        // Auto-select first type if available
         if (_dataTypes.isNotEmpty) {
           _selectedDataType = _dataTypes.first;
           _filterPlansByType(_selectedDataType!);
@@ -384,7 +392,6 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
             if (_dataTypes.contains(dataType)) {
               _filterPlansByType(dataType);
 
-              // Try to find and select the same plan
               final bundle = transaction.metadata?['bundle'];
               if (bundle != null) {
                 Future.delayed(const Duration(milliseconds: 200), () {
@@ -491,7 +498,6 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
   }
 
   Future<void> _buyData() async {
-    // Check internet connection
     final isOnline = context.read<NetworkProvider>().isOnline;
     if (!isOnline) {
       ErrorHandler.handleOfflineMode(context);
@@ -501,14 +507,12 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
     final phone = _phoneController.text.trim();
     final amount = _selectedPlan!.price;
 
-    // Check balance
     final balance = context.read<WalletProvider>().balance;
     if (balance < amount) {
       ErrorHandler.handleInsufficientBalance(context, balance, amount);
       return;
     }
 
-    // Verify PIN
     final pinVerified = await showPinVerificationDialog(
       context,
       title: 'Enter PIN',
@@ -520,7 +524,6 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
       return;
     }
 
-    // Re-authentication for large amounts
     if (amount >= 10000) {
       final reAuthenticated = await requireReAuthentication(
         context,
@@ -541,7 +544,6 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
       _isProcessing = true;
     });
 
-    // Call API
     final authService = context.read<AuthProvider>().authService;
     final result = await authService.api.buyData(
       network: _selectedNetwork!,
@@ -558,14 +560,11 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
     });
 
     if (result.success && result.data != null) {
-      // Save beneficiary if checked
       await _saveBeneficiaryToStorage();
 
-      // Update balance
       final walletProvider = context.read<WalletProvider>();
       walletProvider.deductBalance(amount);
 
-      // Create transaction
       final transaction = Transaction(
         id: result.data!['transaction_id'],
         type: TransactionType.data,
@@ -584,10 +583,8 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
         },
       );
 
-      // Add to history
       context.read<TransactionProvider>().addTransaction(transaction);
 
-      // Navigate to success screen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -620,10 +617,8 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Network offline warning
                   OfflineBanner(isOffline: !networkProvider.isOnline),
 
-                  // Network Selector
                   NetworkSelector(
                     selectedNetwork: _selectedNetwork,
                     onNetworkSelected: _onNetworkSelected,
@@ -685,9 +680,7 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
                           label: Text(type),
                           selected: isSelected,
                           onSelected: (selected) {
-                            if (selected) {
-                              _filterPlansByType(type);
-                            }
+                            if (selected) _filterPlansByType(type);
                           },
                           selectedColor: Theme.of(
                             context,
@@ -747,12 +740,27 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
                           style: Theme.of(context).textTheme.titleMedium
                               ?.copyWith(fontWeight: FontWeight.bold),
                         ),
-                        Text(
-                          '${_searchedPlans.length} plan${_searchedPlans.length != 1 ? 's' : ''}',
-                          style: TextStyle(
-                            color: Colors.grey[600],
-                            fontSize: 12,
-                          ),
+                        Row(
+                          children: [
+                            if (_plansFromCache)
+                              Padding(
+                                padding: const EdgeInsets.only(right: 8),
+                                child: CachedDataBadge(
+                                  cachedAt: _selectedNetwork != null
+                                      ? CacheService.getDataPlansTime(
+                                          _selectedNetwork!,
+                                        )
+                                      : null,
+                                ),
+                              ),
+                            Text(
+                              '${_searchedPlans.length} plan${_searchedPlans.length != 1 ? 's' : ''}',
+                              style: TextStyle(
+                                color: Colors.grey[600],
+                                fontSize: 12,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -815,13 +823,16 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
                   // Buy Button
                   if (_selectedPlan != null) ...[
                     const SizedBox(height: 16),
-                    CustomButton(
-                      text:
-                          'Continue - ₦${NumberFormat('#,##0').format(_selectedPlan!.price)}',
-                      onPressed: networkProvider.isOnline
-                          ? _showConfirmationDialog
-                          : null,
-                      isLoading: _isProcessing,
+                    OfflinePurchaseBlocker(
+                      serviceName: 'data',
+                      child: CustomButton(
+                        text:
+                            'Continue - ₦${NumberFormat('#,##0').format(_selectedPlan!.price)}',
+                        onPressed: networkProvider.isOnline
+                            ? _showConfirmationDialog
+                            : null,
+                        isLoading: _isProcessing,
+                      ),
                     ),
                   ],
                   const SizedBox(height: 32),

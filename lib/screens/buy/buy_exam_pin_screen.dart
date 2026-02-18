@@ -10,6 +10,7 @@ import '../widgets/custom_button.dart';
 import '../widgets/pin_verification_dialog.dart';
 import '../widgets/loading_overlay.dart';
 import '../widgets/offline_banner.dart';
+import '../widgets/offline_purchase_blocker.dart';
 import '../../utils/ui_helpers.dart';
 import '../../utils/error_handler.dart';
 import '../../config/app_constants.dart';
@@ -376,12 +377,15 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
                   const SizedBox(height: 32),
 
                   // Buy Button
-                  CustomButton(
-                    text: 'Continue',
-                    onPressed: networkProvider.isOnline
-                        ? _showConfirmationDialog
-                        : null,
-                    isLoading: _isProcessing,
+                  OfflinePurchaseBlocker(
+                    serviceName: 'exam pins',
+                    child: CustomButton(
+                      text: 'Continue',
+                      onPressed: networkProvider.isOnline
+                          ? _showConfirmationDialog
+                          : null,
+                      isLoading: _isProcessing,
+                    ),
                   ),
                 ],
               ),

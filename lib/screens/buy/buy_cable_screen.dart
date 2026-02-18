@@ -6,11 +6,13 @@ import '../../providers/auth_provider.dart';
 import '../../providers/wallet_provider.dart';
 import '../../providers/network_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../services/cache_service.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_textfield.dart';
 import '../widgets/pin_verification_dialog.dart';
 import '../widgets/loading_overlay.dart';
 import '../widgets/offline_banner.dart';
+import '../widgets/offline_purchase_blocker.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_retry.dart';
 import '../../utils/ui_helpers.dart';
@@ -168,7 +170,6 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
 
       UiHelpers.showSnackBar(context, 'Smartcard validated successfully');
 
-      // Load packages
       _loadCablePlans(_selectedProvider!);
     } else {
       UiHelpers.showSnackBar(
@@ -180,6 +181,27 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
   }
 
   Future<void> _loadCablePlans(String provider) async {
+    final isOnline = context.read<NetworkProvider>().isOnline;
+
+    // Try cache first
+    final cachedPlans = CacheService.getCachedCablePlans(provider);
+
+    if (!isOnline) {
+      if (cachedPlans != null) {
+        setState(() {
+          _allPlans = cachedPlans;
+          _searchedPlans = _allPlans;
+        });
+      } else {
+        UiHelpers.showSnackBar(
+          context,
+          'No internet and no cached plans available',
+          isError: true,
+        );
+      }
+      return;
+    }
+
     setState(() {
       _isLoadingPlans = true;
     });
@@ -194,19 +216,22 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
     });
 
     if (result.success && result.data != null) {
-      setState(() {
-        // Parse plans from the nested map for the selected provider
-        final providerPlans = result.data![provider] as List?;
-        _allPlans = [];
+      // Cache the plans for this provider
+      final providerPlans = result.data![provider] as List?;
+      final parsedPlans = <CablePlan>[];
 
-        if (providerPlans != null) {
-          for (final plan in providerPlans) {
-            _allPlans.add(
-              CablePlan.fromJson(Map<String, dynamic>.from(plan), provider),
-            );
-          }
+      if (providerPlans != null) {
+        for (final plan in providerPlans) {
+          parsedPlans.add(
+            CablePlan.fromJson(Map<String, dynamic>.from(plan), provider),
+          );
         }
+      }
 
+      await CacheService.cacheCablePlans(provider, parsedPlans);
+
+      setState(() {
+        _allPlans = parsedPlans;
         _searchedPlans = _allPlans;
       });
     } else {
@@ -241,7 +266,6 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
       _selectedPlan = null;
     });
 
-    // Auto-validate
     if (_selectedProvider != null && _smartcardController.text.isNotEmpty) {
       _validateSmartcard();
     }
@@ -256,7 +280,6 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
       _selectedPlan = null;
     });
 
-    // Auto-validate
     if (_selectedProvider != null && _smartcardController.text.isNotEmpty) {
       _validateSmartcard();
     }
@@ -350,7 +373,6 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
   }
 
   Future<void> _buyCable() async {
-    // Check internet connection
     final isOnline = context.read<NetworkProvider>().isOnline;
     if (!isOnline) {
       ErrorHandler.handleOfflineMode(context);
@@ -360,14 +382,12 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
     final smartcard = _smartcardController.text.trim();
     final amount = _selectedPlan!.price;
 
-    // Check balance
     final balance = context.read<WalletProvider>().balance;
     if (balance < amount) {
       ErrorHandler.handleInsufficientBalance(context, balance, amount);
       return;
     }
 
-    // Verify PIN
     final pinVerified = await showPinVerificationDialog(
       context,
       title: 'Enter PIN',
@@ -379,7 +399,6 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
       return;
     }
 
-    // Re-authentication for large amounts
     if (amount >= 10000) {
       final reAuthenticated = await requireReAuthentication(
         context,
@@ -400,7 +419,6 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
       _isProcessing = true;
     });
 
-    // Call API
     final authService = context.read<AuthProvider>().authService;
     final result = await authService.api.buyCable(
       provider: _selectedProvider!,
@@ -416,14 +434,11 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
     });
 
     if (result.success && result.data != null) {
-      // Save beneficiary if checked
       await _saveBeneficiaryToStorage();
 
-      // Update balance
       final walletProvider = context.read<WalletProvider>();
       walletProvider.deductBalance(amount);
 
-      // Create transaction
       final transaction = Transaction(
         id: result.data!['transaction_id'],
         type: TransactionType.cable,
@@ -442,10 +457,8 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
         },
       );
 
-      // Add to history
       context.read<TransactionProvider>().addTransaction(transaction);
 
-      // Navigate to success screen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -478,7 +491,6 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Network offline warning
                   OfflineBanner(isOffline: !networkProvider.isOnline),
 
                   // Provider Selector
@@ -670,13 +682,16 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
                   // Buy Button
                   if (_selectedPlan != null) ...[
                     const SizedBox(height: 16),
-                    CustomButton(
-                      text:
-                          'Continue - ₦${NumberFormat('#,##0').format(_selectedPlan!.price)}',
-                      onPressed: networkProvider.isOnline
-                          ? _showConfirmationDialog
-                          : null,
-                      isLoading: _isProcessing,
+                    OfflinePurchaseBlocker(
+                      serviceName: 'cable TV',
+                      child: CustomButton(
+                        text:
+                            'Continue - ₦${NumberFormat('#,##0').format(_selectedPlan!.price)}',
+                        onPressed: networkProvider.isOnline
+                            ? _showConfirmationDialog
+                            : null,
+                        isLoading: _isProcessing,
+                      ),
                     ),
                   ],
                   const SizedBox(height: 32),

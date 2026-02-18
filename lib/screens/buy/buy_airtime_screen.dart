@@ -14,6 +14,7 @@ import '../widgets/custom_textfield.dart';
 import '../widgets/pin_verification_dialog.dart';
 import '../widgets/loading_overlay.dart';
 import '../widgets/offline_banner.dart';
+import '../widgets/offline_purchase_blocker.dart';
 import '../../utils/validators.dart';
 import '../../utils/ui_helpers.dart';
 import '../../utils/error_handler.dart';
@@ -603,12 +604,15 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
                   const SizedBox(height: 24),
 
                   // Buy Button
-                  CustomButton(
-                    text: 'Buy Airtime',
-                    onPressed: networkProvider.isOnline
-                        ? _showConfirmationDialog
-                        : null,
-                    isLoading: _isProcessing,
+                  OfflinePurchaseBlocker(
+                    serviceName: 'airtime',
+                    child: CustomButton(
+                      text: 'Buy Airtime',
+                      onPressed: networkProvider.isOnline
+                          ? _showConfirmationDialog
+                          : null,
+                      isLoading: _isProcessing,
+                    ),
                   ),
                   const SizedBox(height: 32),
 

@@ -1,6 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../providers/network_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../services/cache_service.dart';
+import '../../utils/ui_helpers.dart';
+import '../widgets/cached_data_badge.dart';
 import '../widgets/empty_state.dart';
 import '../widgets/error_retry.dart';
 import '../widgets/transaction_card.dart';
@@ -43,6 +47,25 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
   }
 
   Future<void> _loadTransactions() async {
+    if (!mounted) return;
+
+    final isOnline = context.read<NetworkProvider>().isOnline;
+
+    if (!isOnline) {
+      // Serve from cache when offline
+      final cached = CacheService.getCachedTransactions();
+      if (cached != null) {
+        context.read<TransactionProvider>().loadFromCache(cached);
+      } else {
+        UiHelpers.showSnackBar(
+          context,
+          'No internet. No cached data available.',
+          isError: true,
+        );
+      }
+      return;
+    }
+
     await context.read<TransactionProvider>().fetchTransactions();
   }
 
@@ -169,6 +192,11 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
             onRefresh: _loadTransactions,
             child: Column(
               children: [
+                // Offline/cache banner — shown at the top of the list
+                OfflineContentBanner(
+                  cachedAt: CacheService.getTransactionsTime(),
+                ),
+
                 // Active filters chip
                 if (provider.hasActiveFilters)
                   Container(
@@ -268,21 +296,13 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
   String _getActiveFiltersText(TransactionProvider provider) {
     final filters = <String>[];
 
-    if (provider.typeFilter != 'all') {
-      filters.add(provider.typeFilter);
-    }
-    if (provider.statusFilter != 'all') {
-      filters.add(provider.statusFilter);
-    }
-    if (provider.networkFilter != 'all') {
-      filters.add(provider.networkFilter);
-    }
+    if (provider.typeFilter != 'all') filters.add(provider.typeFilter);
+    if (provider.statusFilter != 'all') filters.add(provider.statusFilter);
+    if (provider.networkFilter != 'all') filters.add(provider.networkFilter);
     if (provider.startDate != null || provider.endDate != null) {
       filters.add('date range');
     }
-    if (provider.searchQuery.isNotEmpty) {
-      filters.add('search');
-    }
+    if (provider.searchQuery.isNotEmpty) filters.add('search');
 
     if (filters.isEmpty) return '';
     if (filters.length == 1) return 'Filtered by ${filters[0]}';

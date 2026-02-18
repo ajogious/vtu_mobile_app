@@ -19,10 +19,13 @@ import '../buy/buy_exam_pin_screen.dart';
 import '../referral/referral_screen.dart';
 import '../settings/set_pin_screen.dart';
 import '../transactions/transaction_list_screen.dart';
+import '../transactions/transaction_detail_screen.dart';
 import '../wallet/wallet_screen.dart';
 import '../wallet/fund_wallet_screen.dart';
 import '../widgets/service_card.dart';
 import '../widgets/transaction_card.dart';
+import '../widgets/offline_banner.dart';
+import '../widgets/cached_data_badge.dart';
 import '../auth/login_screen.dart';
 import '../profile/profile_screen.dart';
 import '../wallet/kyc_screen.dart';
@@ -42,6 +45,31 @@ class _DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _initializeDashboard();
     _checkPinSetup();
+
+    // Register reconnect callback after first frame so context is ready
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<NetworkProvider>().onReconnect(_onReconnected);
+    });
+  }
+
+  @override
+  void dispose() {
+    // Clean up callback to avoid calling back into a dead widget
+    context.read<NetworkProvider>().removeReconnectCallback(_onReconnected);
+    super.dispose();
+  }
+
+  Future<void> _onReconnected() async {
+    if (!mounted) return;
+
+    await Future.wait([
+      context.read<WalletProvider>().loadBalance(forceRefresh: true),
+      context.read<TransactionProvider>().fetchTransactions(),
+    ]);
+
+    if (!mounted) return;
+
+    UiHelpers.showSnackBar(context, '✓ Data synced successfully');
   }
 
   Future<void> _checkPinSetup() async {
@@ -113,13 +141,22 @@ class _DashboardScreenState extends State<DashboardScreen> {
     print('Recent count: ${transactionProvider.recentTransactions.length}');
   }
 
+  // Updated pull-to-refresh — shows cached data notice when offline
   Future<void> _refreshDashboard() async {
-    final walletProvider = context.read<WalletProvider>();
-    final transactionProvider = context.read<TransactionProvider>();
+    final isOnline = context.read<NetworkProvider>().isOnline;
+
+    if (!isOnline) {
+      UiHelpers.showSnackBar(
+        context,
+        'No internet connection. Showing cached data.',
+        isError: true,
+      );
+      return;
+    }
 
     await Future.wait([
-      walletProvider.fetchBalance(),
-      transactionProvider.fetchTransactions(page: 1, limit: 5),
+      context.read<WalletProvider>().loadBalance(forceRefresh: true),
+      context.read<TransactionProvider>().fetchTransactions(),
     ]);
   }
 
@@ -164,7 +201,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     final authProvider = context.watch<AuthProvider>();
-    final networkProvider = context.watch<NetworkProvider>();
     final walletProvider = context.watch<WalletProvider>();
     final user = authProvider.user;
 
@@ -202,29 +238,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
           physics: const AlwaysScrollableScrollPhysics(),
           child: Column(
             children: [
-              // Offline banner
-              if (!networkProvider.isOnline)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(12),
-                  color: Colors.red,
-                  child: const Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.wifi_off, color: Colors.white, size: 20),
-                      SizedBox(width: 8),
-                      Text(
-                        'You are offline',
-                        style: TextStyle(color: Colors.white),
-                      ),
-                    ],
-                  ),
-                ),
+              // Offline banner (shows red offline / green reconnected)
+              const OfflineBanner(),
 
               // Wallet Balance Card
               _buildWalletCard(
                 walletProvider.balance,
                 walletProvider.isLoading,
+                walletProvider.isFromCache ? walletProvider.lastUpdated : null,
               ),
 
               // KYC Prompt Banner
@@ -329,7 +350,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildWalletCard(double balance, bool isLoading) {
+  Widget _buildWalletCard(double balance, bool isLoading, DateTime? cachedAt) {
     return Container(
       margin: const EdgeInsets.all(16),
       padding: const EdgeInsets.all(20),
@@ -402,6 +423,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
             ],
           ),
+          // Show cached badge when balance is from cache
+          if (cachedAt != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 8),
+              child: CachedDataBadge(cachedAt: cachedAt, label: 'Balance'),
+            ),
           const SizedBox(height: 16),
           Row(
             children: [
@@ -450,7 +477,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Only the 6 service tiles go inside the GridView now
   Widget _buildServicesGrid() {
     return GridView.count(
       shrinkWrap: true,
@@ -536,7 +562,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Airtime to Cash card — full-width banner below the services grid
   Widget _buildAirtimeToCashCard() {
     return Card(
       elevation: 2,
@@ -593,7 +618,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // Referral card lives outside the grid as a full-width banner
   Widget _buildReferralCard() {
     return Card(
       elevation: 2,
@@ -729,10 +753,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
                       (transaction) => TransactionCard(
                         transaction: transaction,
                         onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text(
-                                'Transaction Detail - Coming in Day 18',
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => TransactionDetailScreen(
+                                transaction: transaction,
                               ),
                             ),
                           );

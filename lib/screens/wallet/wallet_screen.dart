@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/wallet_provider.dart';
+import '../widgets/cached_data_badge.dart';
 import '../widgets/custom_button.dart';
 import '../../models/virtual_account_model.dart';
 import '../../utils/ui_helpers.dart';
@@ -25,7 +26,6 @@ class _WalletScreenState extends State<WalletScreen> {
   @override
   void initState() {
     super.initState();
-    // ✅ FIX: Use addPostFrameCallback to avoid build-time errors
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadVirtualAccounts();
     });
@@ -98,7 +98,11 @@ class _WalletScreenState extends State<WalletScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Balance Card
-              _buildBalanceCard(balance, walletProvider.isLoading),
+              _buildBalanceCard(
+                balance,
+                walletProvider.isLoading,
+                walletProvider.lastUpdated,
+              ),
               const SizedBox(height: 24),
 
               // Action Buttons
@@ -148,7 +152,11 @@ class _WalletScreenState extends State<WalletScreen> {
     );
   }
 
-  Widget _buildBalanceCard(double balance, bool isLoading) {
+  Widget _buildBalanceCard(
+    double balance,
+    bool isLoading,
+    DateTime? lastUpdated,
+  ) {
     return Container(
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
@@ -220,6 +228,11 @@ class _WalletScreenState extends State<WalletScreen> {
                 ),
             ],
           ),
+          // Cached data badge — only shown when balance is visible
+          if (_balanceVisible) ...[
+            const SizedBox(height: 4),
+            CachedDataBadge(cachedAt: lastUpdated, label: 'Balance'),
+          ],
         ],
       ),
     );
@@ -263,7 +276,6 @@ class _WalletScreenState extends State<WalletScreen> {
                   MaterialPageRoute(builder: (_) => const KycScreen()),
                 );
 
-                // Refresh if KYC was successful
                 if (result == true && mounted) {
                   await _loadVirtualAccounts();
                   setState(() {});
