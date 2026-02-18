@@ -10,6 +10,7 @@ import '../widgets/custom_textfield.dart';
 import '../widgets/pin_verification_dialog.dart';
 import '../../utils/ui_helpers.dart';
 import '../../models/transaction_model.dart';
+import '../../services/notification_service.dart';
 
 class WithdrawEarningsScreen extends StatefulWidget {
   const WithdrawEarningsScreen({super.key});
@@ -100,6 +101,9 @@ class _WithdrawEarningsScreenState extends State<WithdrawEarningsScreen> {
       );
 
       context.read<TransactionProvider>().addTransaction(transaction);
+
+      // Fire notification
+      await NotificationService.walletCredited(amount, 'Referral Earnings');
 
       // Show success
       if (!mounted) return;

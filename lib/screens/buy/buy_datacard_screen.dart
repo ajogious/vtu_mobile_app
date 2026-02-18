@@ -15,6 +15,7 @@ import '../widgets/offline_purchase_blocker.dart';
 import '../../utils/ui_helpers.dart';
 import '../../utils/error_handler.dart';
 import '../../models/transaction_model.dart';
+import '../../services/notification_service.dart';
 import 'datacard_success_screen.dart';
 
 class BuyDatacardScreen extends StatefulWidget {
@@ -242,6 +243,15 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
 
       // Add to history
       context.read<TransactionProvider>().addTransaction(transaction);
+
+      // Fire notification
+      await NotificationService.transactionSuccess(transaction);
+
+      // Check low balance
+      final newBalance = context.read<WalletProvider>().balance;
+      if (newBalance < 500) {
+        await NotificationService.lowBalance(newBalance);
+      }
 
       // Navigate to success screen
       Navigator.pushReplacement(

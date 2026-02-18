@@ -7,6 +7,7 @@ import '../../providers/app_lock_provider.dart';
 import '../../providers/theme_provider.dart';
 import '../../services/storage_service.dart';
 import '../../utils/ui_helpers.dart';
+import '../beneficiaries/beneficiary_management_screen.dart';
 import 'change_pin_screen.dart';
 import '../auth/login_screen.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -251,6 +252,59 @@ class _SettingsScreenState extends State<SettingsScreen> {
             secondary: const Icon(Icons.local_offer),
             value: _promotionalMessages,
             onChanged: (value) => _toggleNotification('promotional', value),
+          ),
+          const Divider(),
+
+          // Add after Security section, before About section:
+          _buildSectionHeader('Beneficiaries'),
+          ListTile(
+            leading: const Icon(Icons.phone_android),
+            title: const Text('Airtime Beneficiaries'),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    const BeneficiaryManagementScreen(serviceType: 'airtime'),
+              ),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.wifi),
+            title: const Text('Data Beneficiaries'),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    const BeneficiaryManagementScreen(serviceType: 'data'),
+              ),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.tv),
+            title: const Text('Cable TV Beneficiaries'),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) =>
+                    const BeneficiaryManagementScreen(serviceType: 'cable'),
+              ),
+            ),
+          ),
+          ListTile(
+            leading: const Icon(Icons.bolt),
+            title: const Text('Electricity Beneficiaries'),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => const BeneficiaryManagementScreen(
+                  serviceType: 'electricity',
+                ),
+              ),
+            ),
           ),
           const Divider(),
 

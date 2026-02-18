@@ -11,6 +11,7 @@ import '../../utils/ui_helpers.dart';
 import '../../config/app_constants.dart';
 import '../../models/virtual_account_model.dart';
 import '../../models/transaction_model.dart';
+import '../../services/notification_service.dart';
 
 class FundWalletScreen extends StatefulWidget {
   const FundWalletScreen({super.key});
@@ -140,6 +141,9 @@ class _FundWalletScreenState extends State<FundWalletScreen> {
 
       // Add to transaction history
       context.read<TransactionProvider>().addTransaction(transaction);
+
+      // Fire notification
+      await NotificationService.walletCredited(amount, 'Card Payment');
 
       // Show success message
       UiHelpers.showSnackBar(

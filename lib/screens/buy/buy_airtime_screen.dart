@@ -20,6 +20,7 @@ import '../../utils/ui_helpers.dart';
 import '../../utils/error_handler.dart';
 import '../../services/storage_service.dart';
 import '../../models/transaction_model.dart';
+import '../../services/notification_service.dart';
 import '../../utils/app_formatters.dart';
 import 'airtime_success_screen.dart';
 
@@ -453,6 +454,15 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
       );
 
       context.read<TransactionProvider>().addTransaction(transaction);
+
+      // Fire notification
+      await NotificationService.transactionSuccess(transaction);
+
+      // Check low balance
+      final newBalance = context.read<WalletProvider>().balance;
+      if (newBalance < 500) {
+        await NotificationService.lowBalance(newBalance);
+      }
 
       Navigator.pushReplacement(
         context,

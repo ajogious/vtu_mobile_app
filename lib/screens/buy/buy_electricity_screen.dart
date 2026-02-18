@@ -18,6 +18,7 @@ import '../../config/app_constants.dart';
 import '../../services/storage_service.dart';
 import '../../models/transaction_model.dart';
 import '../../utils/app_formatters.dart';
+import '../../services/notification_service.dart';
 import 'electricity_success_screen.dart';
 
 class BuyElectricityScreen extends StatefulWidget {
@@ -406,6 +407,15 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
 
       // Add to history
       context.read<TransactionProvider>().addTransaction(transaction);
+
+      // Fire notification
+      await NotificationService.transactionSuccess(transaction);
+
+      // Check low balance
+      final newBalance = context.read<WalletProvider>().balance;
+      if (newBalance < 500) {
+        await NotificationService.lowBalance(newBalance);
+      }
 
       // Navigate to success screen
       Navigator.pushReplacement(

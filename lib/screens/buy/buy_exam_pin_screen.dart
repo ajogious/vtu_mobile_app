@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/auth_provider.dart';
@@ -15,6 +14,7 @@ import '../../utils/ui_helpers.dart';
 import '../../utils/error_handler.dart';
 import '../../config/app_constants.dart';
 import '../../models/transaction_model.dart';
+import '../../services/notification_service.dart';
 import 'exam_pin_success_screen.dart';
 
 class BuyExamPinScreen extends StatefulWidget {
@@ -193,6 +193,15 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
 
       // Add to history
       context.read<TransactionProvider>().addTransaction(transaction);
+
+      // Fire notification
+      await NotificationService.transactionSuccess(transaction);
+
+      // Check low balance
+      final newBalance = context.read<WalletProvider>().balance;
+      if (newBalance < 500) {
+        await NotificationService.lowBalance(newBalance);
+      }
 
       // Navigate to success screen
       Navigator.pushReplacement(

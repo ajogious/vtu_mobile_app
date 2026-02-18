@@ -4,6 +4,8 @@ import 'package:provider/provider.dart';
 import 'config/theme_config.dart';
 import 'providers/referral_provider.dart';
 import 'providers/app_lock_provider.dart';
+import 'services/cache_service.dart';
+import 'services/notification_service.dart';
 import 'services/storage_service.dart';
 import 'providers/auth_provider.dart';
 import 'providers/theme_provider.dart';
@@ -18,7 +20,11 @@ void main() async {
 
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
+  // Initialize services
   await StorageService().init();
+  await CacheService.init();
+  await NotificationService.init();
+  await NotificationService.requestPermissions();
 
   runApp(const MyApp());
 }
