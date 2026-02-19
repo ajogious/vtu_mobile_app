@@ -14,6 +14,9 @@ class StorageService {
 
   // ========== PREFERENCE KEYS ==========
 
+  static const String _tokenKey =
+      'auth_token'; // Added for update compatibility
+
   static const String _notificationTransactions = 'notification_transactions';
   static const String _notificationWallet = 'notification_wallet';
   static const String _notificationReferrals = 'notification_referrals';
@@ -35,26 +38,29 @@ class StorageService {
   // Token management
   Future<void> saveToken(String token) async {
     if (!kIsWeb && _secureStorage != null) {
-      await _secureStorage!.write(key: 'auth_token', value: token);
+      await _secureStorage!.write(key: _tokenKey, value: token);
     } else {
-      await _prefs.setString('auth_token', token);
+      await _prefs.setString(_tokenKey, token);
     }
   }
 
   Future<String?> getToken() async {
     if (!kIsWeb && _secureStorage != null) {
-      return await _secureStorage!.read(key: 'auth_token');
+      return await _secureStorage!.read(key: _tokenKey);
     }
-    return _prefs.getString('auth_token');
+    return _prefs.getString(_tokenKey);
   }
 
   Future<void> deleteToken() async {
     if (!kIsWeb && _secureStorage != null) {
-      await _secureStorage!.delete(key: 'auth_token');
+      await _secureStorage!.delete(key: _tokenKey);
     } else {
-      await _prefs.remove('auth_token');
+      await _prefs.remove(_tokenKey);
     }
   }
+
+  /// Alias for [deleteToken] — added for update compatibility.
+  Future<void> clearToken() => deleteToken();
 
   // PIN management
   Future<void> savePin(String pin) async {

@@ -1,22 +1,16 @@
 import 'api/api_service.dart';
 import 'api/mock_api_service.dart';
+import 'api/real_api_service.dart';
 import 'storage_service.dart';
-import '../config/api_config.dart';
 import '../core/api_result.dart';
 import '../models/user_model.dart';
 
 class AuthService {
-  late ApiService _api;
+  late final ApiService _api;
   final StorageService _storage = StorageService();
 
-  AuthService() {
-    // Switch between mock and real API based on environment
-    if (ApiConfig.isMock) {
-      _api = MockApiService();
-    } else {
-      // _api = RealApiService(); // Will create this on Day 26
-      _api = MockApiService(); // Fallback to mock for now
-    }
+  AuthService({bool useMock = false}) {
+    _api = useMock ? MockApiService() : RealApiService();
   }
 
   // Login

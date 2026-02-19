@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
 import '../services/cache_service.dart';
@@ -99,6 +100,16 @@ class WalletProvider extends ChangeNotifier {
   void updateBalance(double newBalance) {
     setBalance(newBalance);
     _storage.updateUserBalance(newBalance);
+  }
+
+  // Update balance from user profile
+  void updateFromUser(User user) {
+    _balance = user.balance;
+    _lastUpdated = DateTime.now();
+    _isFromCache = false;
+
+    CacheService.cacheWalletBalance(_balance);
+    notifyListeners();
   }
 
   // Set balance, update cache and timestamp
