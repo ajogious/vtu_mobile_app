@@ -8,6 +8,7 @@ import '../../providers/theme_provider.dart';
 import '../../services/storage_service.dart';
 import '../../utils/ui_helpers.dart';
 import '../beneficiaries/beneficiary_management_screen.dart';
+import 'change_password_screen.dart';
 import 'change_pin_screen.dart';
 import '../auth/login_screen.dart';
 import 'package:package_info_plus/package_info_plus.dart';
@@ -200,6 +201,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
               Navigator.push(
                 context,
                 MaterialPageRoute(builder: (_) => const ChangePinScreen()),
+              );
+            },
+          ),
+          ListTile(
+            leading: const Icon(Icons.password),
+            title: const Text('Change Password'),
+            subtitle: const Text('Update your login password'),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
               );
             },
           ),
