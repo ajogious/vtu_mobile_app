@@ -108,6 +108,22 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
+  // Refresh user data from API (GET /user/me.php)
+  Future<bool> refreshUser() async {
+    try {
+      final result = await _authService.api.getMe();
+      if (result.success && result.data != null) {
+        _user = result.data;
+        await _storage.saveUser(_user!);
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
   // Update user (and save to storage)
   Future<void> updateUser(User user) async {
     _user = user;

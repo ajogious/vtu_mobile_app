@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import '../../config/api_config.dart';
 import '../../config/api_result.dart';
+import '../../models/data_plan_model.dart';
 import '../../models/user_model.dart';
 import '../../models/transaction_model.dart';
 import '../../models/virtual_account_model.dart';
@@ -427,14 +428,46 @@ class RealApiService implements ApiService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   @override
-  Future<ApiResult<Map<String, dynamic>>> getDataPlans() async {
+  Future<ApiResult<List<DataPlan>>> getDataPlans({String? network}) async {
     try {
       final response = await _dio.get(ApiConfig.dataPlansEndpoint);
 
       final responseData = response.data;
 
-      if (responseData['ok'] == true || responseData['networks'] != null) {
-        return ApiResult.success(Map<String, dynamic>.from(responseData));
+      if (responseData['ok'] == true) {
+        final data = responseData['data'];
+        final plansData = data['plans'] as Map<String, dynamic>? ?? {};
+
+        final List<DataPlan> allPlans = [];
+
+        plansData.forEach((networkName, types) {
+          if (network != null && networkName != network) return;
+
+          if (types is Map<String, dynamic>) {
+            types.forEach((typeName, plans) {
+              if (plans is List) {
+                for (final plan in plans) {
+                  final planSize = plan['plan'] ?? '';
+                  final size = plan['size'] ?? 'GB';
+                  final planName = '$planSize$size';
+
+                  allPlans.add(
+                    DataPlan(
+                      id: plan['id']?.toString() ?? '', // ← CAPTURE ID
+                      name: planName,
+                      type: typeName,
+                      price: (plan['price'] as num?)?.toDouble() ?? 0,
+                      validity: plan['duration'] ?? '',
+                      network: networkName,
+                    ),
+                  );
+                }
+              }
+            });
+          }
+        });
+
+        return ApiResult.success(allPlans);
       }
 
       return ApiResult.failure(
@@ -443,7 +476,7 @@ class RealApiService implements ApiService {
     } on DioException catch (e) {
       return ApiResult.failure(_handleDioError(e));
     } catch (e) {
-      return ApiResult.failure(e.toString());
+      return ApiResult.failure('Error parsing plans: $e');
     }
   }
 
@@ -634,8 +667,8 @@ class RealApiService implements ApiService {
   @override
   Future<ApiResult<Map<String, dynamic>>> buyData({
     required String network,
-    required String type,
-    required String dataBundle,
+    required String dataType,
+    required String dataPlan, // This should now be the plan ID
     required String number,
     required String pincode,
   }) async {
@@ -644,8 +677,8 @@ class RealApiService implements ApiService {
         ApiConfig.buyDataEndpoint,
         data: {
           'network': network,
-          'type': type,
-          'dataBundle': dataBundle,
+          'type': dataType,
+          'dataBundle': dataPlan, // Send plan ID (e.g., "55")
           'number': number,
           'pincode': pincode,
         },
@@ -655,6 +688,7 @@ class RealApiService implements ApiService {
 
       if (responseData['ok'] == true) {
         final data = responseData['data'] ?? responseData;
+
         return ApiResult.success({
           'transaction_id': data['transaction_id'] ?? data['id'],
           'reference': data['reference'],

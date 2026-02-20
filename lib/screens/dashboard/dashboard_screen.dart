@@ -127,8 +127,15 @@ class _DashboardScreenState extends State<DashboardScreen> {
   Future<void> _initializeDashboard() async {
     if (!mounted) return;
 
+    final authProvider = context.read<AuthProvider>();
     final walletProvider = context.read<WalletProvider>();
     final transactionProvider = context.read<TransactionProvider>();
+
+    // Refresh user data from API
+    await authProvider.refreshUser();
+    if (authProvider.user != null) {
+      walletProvider.updateFromUser(authProvider.user!);
+    }
 
     await walletProvider.fetchBalance();
     final success = await transactionProvider.fetchTransactions(
@@ -154,10 +161,18 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
 
+    final authProvider = context.read<AuthProvider>();
+
     await Future.wait([
+      authProvider.refreshUser(),
       context.read<WalletProvider>().loadBalance(forceRefresh: true),
       context.read<TransactionProvider>().fetchTransactions(),
     ]);
+
+    // Sync wallet from refreshed user
+    if (authProvider.user != null && mounted) {
+      context.read<WalletProvider>().updateFromUser(authProvider.user!);
+    }
   }
 
   Future<void> _handleLogout() async {

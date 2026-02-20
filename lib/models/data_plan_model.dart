@@ -1,47 +1,41 @@
 class DataPlan {
-  final String id;
-  final String network;
-  final String type;
+  final String id; // ← ADD THIS
   final String name;
+  final String type;
   final double price;
   final String validity;
-  final String? dataVolume;
+  final String network;
 
   DataPlan({
-    required this.id,
-    required this.network,
-    required this.type,
+    required this.id, // ← ADD THIS
     required this.name,
+    required this.type,
     required this.price,
     required this.validity,
-    this.dataVolume,
+    required this.network,
   });
 
-  factory DataPlan.fromJson(
-    Map<String, dynamic> json,
-    String network,
-    String type,
-  ) {
+  // Update fromJson
+  factory DataPlan.fromJson(Map<String, dynamic> json) {
     return DataPlan(
-      id: json['id'].toString(),
-      network: network,
-      type: type,
+      id: json['id']?.toString() ?? '', // ← ADD THIS
       name: json['name'] ?? '',
-      price: double.parse(json['price']?.toString() ?? '0'),
+      type: json['type'] ?? '',
+      price: (json['price'] as num?)?.toDouble() ?? 0,
       validity: json['validity'] ?? '',
-      dataVolume: json['data_volume'],
+      network: json['network'] ?? '',
     );
   }
 
+  // Update toJson
   Map<String, dynamic> toJson() {
     return {
-      'id': id,
-      'network': network,
-      'type': type,
+      'id': id, // ← ADD THIS
       'name': name,
+      'type': type,
       'price': price,
       'validity': validity,
-      'data_volume': dataVolume,
+      'network': network,
     };
   }
 }

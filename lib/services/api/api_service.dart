@@ -1,5 +1,6 @@
 import '../../config/api_result.dart';
 import '../../models/atc_request_model.dart';
+import '../../models/data_plan_model.dart';
 import '../../models/exam_type_model.dart';
 import '../../models/referral_model.dart';
 import '../../models/transaction_model.dart';
@@ -79,7 +80,7 @@ abstract class ApiService {
 
   // ========== PLANS ==========
 
-  Future<ApiResult<Map<String, dynamic>>> getDataPlans();
+  Future<ApiResult<List<DataPlan>>> getDataPlans({String? network});
 
   Future<ApiResult<List<String>>> getAirtimeNetworks();
 
@@ -115,8 +116,8 @@ abstract class ApiService {
 
   Future<ApiResult<Map<String, dynamic>>> buyData({
     required String network,
-    required String type,
-    required String dataBundle,
+    required String dataType,
+    required String dataPlan,
     required String number,
     required String pincode,
   });

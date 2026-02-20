@@ -109,13 +109,7 @@ class CacheService {
     try {
       final List<dynamic> jsonList = jsonDecode(jsonStr);
       return jsonList
-          .map(
-            (json) => DataPlan.fromJson(
-              json,
-              json['network'] ?? '',
-              json['type'] ?? '',
-            ),
-          )
+          .map((json) => DataPlan.fromJson(Map<String, dynamic>.from(json)))
           .toList();
     } catch (e) {
       return null;

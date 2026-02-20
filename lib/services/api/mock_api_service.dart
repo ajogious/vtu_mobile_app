@@ -1,6 +1,7 @@
 import 'dart:math';
 
 import '../../config/api_result.dart';
+import '../../models/data_plan_model.dart';
 import '../../models/user_model.dart';
 import '../../models/transaction_model.dart';
 import '../../models/virtual_account_model.dart';
@@ -304,10 +305,10 @@ class MockApiService implements ApiService {
   // ========== PLANS ==========
 
   @override
-  Future<ApiResult<Map<String, dynamic>>> getDataPlans() async {
+  Future<ApiResult<List<DataPlan>>> getDataPlans({String? network}) async {
     await _delay();
 
-    return ApiResult.success({
+    final allPlansData = {
       'MTN': {
         'SME': [
           {'id': '1', 'name': '500MB', 'price': 150, 'validity': '30 days'},
@@ -351,7 +352,28 @@ class MockApiService implements ApiService {
           {'id': '23', 'name': '5GB', 'price': 1500, 'validity': '30 days'},
         ],
       },
+    };
+
+    final List<DataPlan> plans = [];
+    allPlansData.forEach((networkName, types) {
+      if (network != null && networkName != network) return;
+      (types as Map<String, dynamic>).forEach((typeName, planList) {
+        for (final plan in (planList as List)) {
+          plans.add(
+            DataPlan(
+              id: plan['id']?.toString() ?? '',
+              name: plan['name'] ?? '',
+              type: typeName,
+              price: (plan['price'] as num).toDouble(),
+              validity: plan['validity'] ?? '',
+              network: networkName,
+            ),
+          );
+        }
+      });
     });
+
+    return ApiResult.success(plans);
   }
 
   @override
@@ -514,8 +536,8 @@ class MockApiService implements ApiService {
   @override
   Future<ApiResult<Map<String, dynamic>>> buyData({
     required String network,
-    required String type,
-    required String dataBundle,
+    required String dataType,
+    required String dataPlan,
     required String number,
     required String pincode,
   }) async {
@@ -538,7 +560,7 @@ class MockApiService implements ApiService {
       reference: 'REF${DateTime.now().millisecondsSinceEpoch}',
       balanceBefore: balanceBefore,
       balanceAfter: balanceAfter,
-      metadata: {'data_type': type, 'bundle': dataBundle},
+      metadata: {'data_type': dataType, 'bundle': dataPlan},
     );
 
     _transactions.insert(0, transaction);

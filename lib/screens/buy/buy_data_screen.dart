@@ -291,7 +291,7 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
     });
 
     final authService = context.read<AuthProvider>().authService;
-    final result = await authService.api.getDataPlans();
+    final result = await authService.api.getDataPlans(network: network);
 
     if (!mounted) return;
 
@@ -300,27 +300,14 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
     });
 
     if (result.success && result.data != null) {
-      // Parse plans for the selected network
-      final networkData = result.data![network] as Map<String, dynamic>?;
-      final parsedPlans = <DataPlan>[];
+      final plans = result.data!;
 
-      if (networkData != null) {
-        networkData.forEach((type, plans) {
-          final planList = plans as List;
-          for (final plan in planList) {
-            parsedPlans.add(
-              DataPlan.fromJson(Map<String, dynamic>.from(plan), network, type),
-            );
-          }
-        });
-      }
-
-      // Cache parsed plans for offline use
-      await CacheService.cacheDataPlans(network, parsedPlans);
+      // Cache plans for offline use
+      await CacheService.cacheDataPlans(network, plans);
 
       setState(() {
         _plansFromCache = false;
-        _allPlans = parsedPlans;
+        _allPlans = plans;
         _dataTypes = _allPlans.map((plan) => plan.type).toSet().toList();
         if (_dataTypes.isNotEmpty) {
           _selectedDataType = _dataTypes.first;
@@ -548,8 +535,8 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
     final authService = context.read<AuthProvider>().authService;
     final result = await authService.api.buyData(
       network: _selectedNetwork!,
-      type: _selectedDataType!,
-      dataBundle: _selectedPlan!.name,
+      dataType: _selectedDataType!,
+      dataPlan: _selectedPlan!.id,
       number: phone,
       pincode: '12345',
     );

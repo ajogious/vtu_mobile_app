@@ -1,6 +1,6 @@
 class ApiConfig {
   // Base URL (LIVE - use this for production)
-  static const String liveBaseUrl = 'https://a3tech.com.ng';
+  static const String liveBaseUrl = 'https://amazcom.com.ng';
 
   // API version path
   static const String apiPath = '/api/app/v1';
