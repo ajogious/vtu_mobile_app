@@ -7,7 +7,6 @@ import '../../providers/auth_provider.dart';
 import '../../providers/network_provider.dart';
 import '../../providers/wallet_provider.dart';
 import '../../providers/transaction_provider.dart';
-import '../../services/storage_service.dart';
 import '../../utils/ui_helpers.dart';
 import '../atc/atc_request_screen.dart';
 import '../buy/buy_airtime_screen.dart';
@@ -44,7 +43,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
   void initState() {
     super.initState();
     _initializeDashboard();
-    _checkPinSetup();
 
     // Register reconnect callback after first frame so context is ready
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -72,14 +70,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     UiHelpers.showSnackBar(context, '✓ Data synced successfully');
   }
 
-  Future<void> _checkPinSetup() async {
-    await Future.delayed(const Duration(seconds: 1));
-
+  void _checkPinSetup() {
     if (!mounted) return;
 
-    final hasPin = await StorageService().hasPin();
-
-    if (!hasPin && mounted) {
+    final user = context.read<AuthProvider>().user;
+    if (user != null && !user.pinSet) {
       _showSetPinPrompt();
     }
   }
@@ -91,15 +86,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       builder: (context) => AlertDialog(
         title: const Text('Set Transaction PIN'),
         content: const Text(
-          'For security, please set a 5-digit PIN to authorize transactions.',
+          'For security, you must set a 5-digit PIN to authorize transactions before you can proceed.',
         ),
         actions: [
-          TextButton(
-            onPressed: () {
-              Navigator.pop(context);
-            },
-            child: const Text('Later'),
-          ),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(context);
@@ -115,9 +104,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   context,
                   'Transaction PIN set successfully',
                 );
+                // Refresh user data so pinSet is updated
+                await context.read<AuthProvider>().refreshUser();
+              } else if (mounted) {
+                // If they didn't set PIN, show prompt again
+                _checkPinSetup();
               }
             },
-            child: const Text('Set PIN'),
+            child: const Text('Set PIN Now'),
           ),
         ],
       ),
@@ -146,6 +140,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
     print('Transactions fetched: $success');
     print('Transaction count: ${transactionProvider.transactions.length}');
     print('Recent count: ${transactionProvider.recentTransactions.length}');
+
+    // Check PIN setup after user data is loaded
+    _checkPinSetup();
   }
 
   // Updated pull-to-refresh — shows cached data notice when offline

@@ -94,28 +94,14 @@ class _SetPinScreenState extends State<SetPinScreen> {
   Widget build(BuildContext context) {
     return WillPopScope(
       onWillPop: () async {
-        // Don't allow back if first time and PIN not set
+        // Block back completely when setting PIN is mandatory
         if (widget.isFirstTime) {
-          final confirmed = await showDialog<bool>(
-            context: context,
-            builder: (context) => AlertDialog(
-              title: const Text('Skip PIN Setup?'),
-              content: const Text(
-                'Transaction PIN is required for purchases. You can set it later from settings.',
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(context, false),
-                  child: const Text('Continue Setup'),
-                ),
-                TextButton(
-                  onPressed: () => Navigator.pop(context, true),
-                  child: const Text('Skip'),
-                ),
-              ],
-            ),
+          UiHelpers.showSnackBar(
+            context,
+            'You must set a transaction PIN before continuing',
+            isError: true,
           );
-          return confirmed ?? false;
+          return false;
         }
         return true;
       },
@@ -123,6 +109,7 @@ class _SetPinScreenState extends State<SetPinScreen> {
         appBar: AppBar(
           title: const Text('Set Transaction PIN'),
           centerTitle: true,
+          automaticallyImplyLeading: !widget.isFirstTime,
         ),
         body: SafeArea(
           child: SingleChildScrollView(

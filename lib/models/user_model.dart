@@ -13,6 +13,7 @@ class User {
   final double referralCredit;
   final String level;
   final DateTime? createdAt;
+  final bool pinSet;
 
   User({
     required this.id,
@@ -29,6 +30,7 @@ class User {
     this.referralCredit = 0,
     this.level = 'free',
     this.createdAt,
+    this.pinSet = false,
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -61,6 +63,9 @@ class User {
       createdAt: json['created_at'] != null
           ? DateTime.tryParse(json['created_at'].toString())
           : null,
+
+      // ⚠️ Parse "YES"/"NO" from pin_set
+      pinSet: _parseBool(json['pin_set']),
     );
   }
 
@@ -97,6 +102,7 @@ class User {
       'refer': referralCode,
       'level': level,
       'created_at': createdAt?.toIso8601String(),
+      'pin_set': pinSet ? 'YES' : 'NO',
     };
   }
 
@@ -117,6 +123,7 @@ class User {
     double? referralCredit,
     String? level,
     DateTime? createdAt,
+    bool? pinSet,
   }) {
     return User(
       id: id ?? this.id,
@@ -133,6 +140,7 @@ class User {
       referralCredit: referralCredit ?? this.referralCredit,
       level: level ?? this.level,
       createdAt: createdAt ?? this.createdAt,
+      pinSet: pinSet ?? this.pinSet,
     );
   }
 }
