@@ -184,7 +184,6 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
   Future<void> _loadCablePlans(String provider) async {
     final isOnline = context.read<NetworkProvider>().isOnline;
 
-    // Try cache first
     final cachedPlans = CacheService.getCachedCablePlans(provider);
 
     if (!isOnline) {
@@ -205,6 +204,7 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
 
     setState(() {
       _isLoadingPlans = true;
+      _loadPlansError = null;
     });
 
     final authService = context.read<AuthProvider>().authService;
@@ -217,14 +217,19 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
     });
 
     if (result.success && result.data != null) {
-      // Cache the plans for this provider
       final providerPlans = result.data![provider] as List?;
       final parsedPlans = <CablePlan>[];
 
       if (providerPlans != null) {
         for (final plan in providerPlans) {
           parsedPlans.add(
-            CablePlan.fromJson(Map<String, dynamic>.from(plan), provider),
+            CablePlan(
+              id: plan['id'].toString(),
+              name: plan['cable_plan'].toString().trim(),
+              price: double.parse(plan['amount'].toString()),
+              duration: plan['duration'].toString().trim(),
+              provider: provider,
+            ),
           );
         }
       }

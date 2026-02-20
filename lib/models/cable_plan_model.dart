@@ -16,10 +16,10 @@ class CablePlan {
   factory CablePlan.fromJson(Map<String, dynamic> json, String provider) {
     return CablePlan(
       id: json['id'].toString(),
-      provider: provider,
-      name: json['name'] ?? '',
-      price: double.parse(json['price']?.toString() ?? '0'),
-      duration: json['duration'] ?? '1 month',
+      provider: json['cable_type']?.toString() ?? provider,
+      name: (json['cable_plan'] ?? json['name'] ?? '').toString().trim(),
+      price: double.parse((json['amount'] ?? json['price'] ?? '0').toString()),
+      duration: (json['duration'] ?? '1 month').toString().trim(),
     );
   }
 

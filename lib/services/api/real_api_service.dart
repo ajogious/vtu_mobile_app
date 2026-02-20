@@ -487,12 +487,9 @@ class RealApiService implements ApiService {
 
       final responseData = response.data;
 
-      if (responseData['ok'] == true || responseData['networks'] != null) {
-        final networks =
-            (responseData['networks'] as List?)
-                ?.map((e) => e.toString())
-                .toList() ??
-            ['MTN', 'GLO', 'AIRTEL', '9MOBILE'];
+      if (responseData['ok'] == true) {
+        final items = responseData['data']['items'] as List;
+        final networks = items.map((e) => e['network'].toString()).toList();
         return ApiResult.success(networks);
       }
 
@@ -510,11 +507,22 @@ class RealApiService implements ApiService {
   Future<ApiResult<Map<String, dynamic>>> getCablePlans() async {
     try {
       final response = await _dio.get(ApiConfig.cablePlansEndpoint);
-
       final responseData = response.data;
 
-      if (responseData['ok'] == true || responseData['plans'] != null) {
-        return ApiResult.success(Map<String, dynamic>.from(responseData));
+      if (responseData['ok'] == true) {
+        final items = responseData['data']['items'] as List;
+
+        // Group plans by cable_type
+        final Map<String, dynamic> grouped = {};
+        for (final item in items) {
+          final type = item['cable_type'] as String;
+          if (!grouped.containsKey(type)) {
+            grouped[type] = [];
+          }
+          grouped[type].add(item);
+        }
+
+        return ApiResult.success(grouped);
       }
 
       return ApiResult.failure(

@@ -39,6 +39,8 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
   String? _selectedNetwork;
   bool _saveBeneficiary = false;
   bool _isProcessing = false;
+  bool _loadingNetworks = true;
+  List<String> _airtimeNetworks = [];
 
   List<Map<String, String>> _beneficiaries = [];
   List<Transaction> _recentTransactions = [];
@@ -50,6 +52,7 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
     super.initState();
     _loadBeneficiaries();
     _loadRecentTransactions();
+    _loadAirtimeNetworks();
   }
 
   @override
@@ -57,6 +60,26 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
     _phoneController.dispose();
     _amountController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadAirtimeNetworks() async {
+    final authService = context.read<AuthProvider>().authService;
+    final result = await authService.api.getAirtimeNetworks();
+
+    if (!mounted) return;
+
+    if (result.success && result.data != null) {
+      setState(() {
+        _airtimeNetworks = result.data!;
+        _loadingNetworks = false;
+      });
+    } else {
+      // Fallback to default networks if API fails
+      setState(() {
+        _airtimeNetworks = ['MTN', 'GLO', 'AIRTEL', '9MOBILE'];
+        _loadingNetworks = false;
+      });
+    }
   }
 
   void _loadBeneficiaries() {
@@ -91,19 +114,15 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
     final phone = _phoneController.text.trim();
     final network = _selectedNetwork ?? '';
 
-    // Check if already exists
     final exists = _beneficiaries.any((b) => b['phone'] == phone);
     if (exists) return;
 
-    // Add new beneficiary
     _beneficiaries.insert(0, {'phone': phone, 'network': network});
 
-    // Keep only last 10
     if (_beneficiaries.length > 10) {
       _beneficiaries = _beneficiaries.sublist(0, 10);
     }
 
-    // Save to storage
     final storage = StorageService();
     final beneficiaries = storage.getBeneficiaries();
     beneficiaries['airtime'] = _beneficiaries;
@@ -112,17 +131,12 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
 
   Future<void> _pickContact() async {
     try {
-      // Step 1: Check and request permission
       PermissionStatus status = await Permission.contacts.status;
-
-      print('Contact permission status: $status'); // Debug log
 
       if (status.isDenied) {
         status = await Permission.contacts.request();
-        print('After request, status: $status'); // Debug log
       }
 
-      // Handle permanently denied
       if (status.isPermanentlyDenied) {
         if (!mounted) return;
 
@@ -153,7 +167,6 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
         return;
       }
 
-      // If not granted, show error
       if (!status.isGranted) {
         if (!mounted) return;
         UiHelpers.showSnackBar(
@@ -164,28 +177,15 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
         return;
       }
 
-      print('Opening contact picker...'); // Debug log
-
-      // Step 2: Pick a contact (Method 1 - External Picker)
       final contact = await FlutterContacts.openExternalPick();
 
-      print('Contact picked: ${contact?.id}'); // Debug log
+      if (contact == null) return;
 
-      if (contact == null) {
-        print('No contact selected'); // Debug log
-        return;
-      }
-
-      // Step 3: Fetch full contact details
       final fullContact = await FlutterContacts.getContact(
         contact.id,
         withProperties: true,
         withPhoto: false,
       );
-
-      print(
-        'Full contact loaded: ${fullContact?.displayName}, phones: ${fullContact?.phones.length}',
-      ); // Debug log
 
       if (fullContact == null) {
         if (!mounted) return;
@@ -207,32 +207,23 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
         return;
       }
 
-      // Step 4: Get and clean phone number
       String phone = fullContact.phones.first.number;
-      print('Original phone: $phone'); // Debug log
 
-      // Clean phone number (remove spaces, dashes, parentheses)
       phone = phone.replaceAll(RegExp(r'[\s\-\(\)\.]'), '');
-      print('Cleaned phone: $phone'); // Debug log
 
-      // Remove country code if present
       if (phone.startsWith('+234')) {
         phone = '0${phone.substring(4)}';
       } else if (phone.startsWith('234')) {
         phone = '0${phone.substring(3)}';
       }
 
-      // Ensure it starts with 0
       if (!phone.startsWith('0') && phone.length >= 10) {
         phone = '0$phone';
       }
 
-      // Limit to 11 digits
       if (phone.length > 11) {
         phone = phone.substring(0, 11);
       }
-
-      print('Final phone: $phone'); // Debug log
 
       if (mounted) {
         setState(() {
@@ -246,13 +237,10 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
         );
       }
     } on Exception catch (e) {
-      print('Exception in _pickContact: $e'); // Debug log
-
       if (!mounted) return;
 
       String errorMessage = 'Failed to pick contact';
 
-      // Provide more specific error messages
       if (e.toString().contains('PlatformException')) {
         errorMessage = 'Error accessing contacts. Please try again.';
       } else if (e.toString().contains('MissingPluginException')) {
@@ -262,8 +250,6 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
 
       UiHelpers.showSnackBar(context, errorMessage, isError: true);
     } catch (e) {
-      print('Error in _pickContact: $e'); // Debug log
-
       if (!mounted) return;
       UiHelpers.showSnackBar(
         context,
@@ -302,7 +288,6 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
       return;
     }
 
-    // Check internet connection
     final isOnline = context.read<NetworkProvider>().isOnline;
     if (!isOnline) {
       ErrorHandler.handleOfflineMode(context);
@@ -314,7 +299,6 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
       _amountController.text.replaceAll(',', '').trim(),
     );
 
-    // Check balance
     final balance = context.read<WalletProvider>().balance;
     if (balance < amount) {
       ErrorHandler.handleInsufficientBalance(context, balance, amount);
@@ -385,7 +369,6 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
       _amountController.text.replaceAll(',', '').trim(),
     );
 
-    // Verify PIN
     final pinVerified = await showPinVerificationDialog(
       context,
       title: 'Enter PIN',
@@ -398,7 +381,6 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
       return;
     }
 
-    // Re-authenticate for large transactions
     if (amount >= 10000) {
       final reAuthenticated = await requireReAuthentication(
         context,
@@ -419,7 +401,6 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
       _isProcessing = true;
     });
 
-    // Call API
     final authService = context.read<AuthProvider>().authService;
     final result = await authService.api.buyAirtime(
       network: _selectedNetwork!,
@@ -455,10 +436,8 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
 
       context.read<TransactionProvider>().addTransaction(transaction);
 
-      // Fire notification
       await NotificationService.transactionSuccess(transaction);
 
-      // Check low balance
       final newBalance = context.read<WalletProvider>().balance;
       if (newBalance < 500) {
         await NotificationService.lowBalance(newBalance);
@@ -497,14 +476,22 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
                   OfflineBanner(isOffline: !networkProvider.isOnline),
 
                   // Network Selector
-                  NetworkSelector(
-                    selectedNetwork: _selectedNetwork,
-                    onNetworkSelected: (network) {
-                      setState(() {
-                        _selectedNetwork = network;
-                      });
-                    },
-                  ),
+                  _loadingNetworks
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
+                      : NetworkSelector(
+                          selectedNetwork: _selectedNetwork,
+                          networks: _airtimeNetworks,
+                          onNetworkSelected: (network) {
+                            setState(() {
+                              _selectedNetwork = network;
+                            });
+                          },
+                        ),
                   const SizedBox(height: 24),
 
                   // Phone Number with Contact Picker
