@@ -50,7 +50,6 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Future<void> _navigateToLogin() async {
-    // Mark as not first launch
     await StorageService().setFirstLaunch(false);
 
     if (!mounted) return;
@@ -63,6 +62,9 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final size = MediaQuery.of(context).size;
+    final isSmallScreen = size.height < 700;
+
     return Scaffold(
       body: SafeArea(
         child: Column(
@@ -96,7 +98,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 (index) => _buildDot(index),
               ),
             ),
-            const SizedBox(height: 40),
+            SizedBox(height: isSmallScreen ? 20 : 40),
 
             // Next/Get Started button
             Padding(
@@ -120,7 +122,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 40),
+            SizedBox(height: isSmallScreen ? 20 : 40),
           ],
         ),
       ),
@@ -128,43 +130,51 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   }
 
   Widget _buildPage(OnboardingPage page) {
+    final size = MediaQuery.of(context).size;
+    final isSmallScreen = size.height < 700;
+
     return Padding(
-      padding: const EdgeInsets.all(40),
+      padding: EdgeInsets.symmetric(
+        horizontal: 40,
+        vertical: isSmallScreen ? 16 : 40,
+      ),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           // Icon
           Container(
-            width: 120,
-            height: 120,
+            width: isSmallScreen ? 90 : 120,
+            height: isSmallScreen ? 90 : 120,
             decoration: BoxDecoration(
               color: Theme.of(context).primaryColor.withOpacity(0.1),
               shape: BoxShape.circle,
             ),
             child: Icon(
               page.icon,
-              size: 60,
+              size: isSmallScreen ? 44 : 60,
               color: Theme.of(context).primaryColor,
             ),
           ),
-          const SizedBox(height: 60),
+          SizedBox(height: isSmallScreen ? 32 : 60),
 
           // Title
           Text(
             page.title,
-            style: Theme.of(
-              context,
-            ).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.bold),
+            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+              fontWeight: FontWeight.bold,
+              fontSize: isSmallScreen ? 20 : null,
+            ),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: isSmallScreen ? 10 : 16),
 
           // Description
           Text(
             page.description,
-            style: Theme.of(
-              context,
-            ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
+            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+              color: Colors.grey[600],
+              fontSize: isSmallScreen ? 14 : null,
+            ),
             textAlign: TextAlign.center,
           ),
         ],

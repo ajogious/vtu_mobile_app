@@ -94,7 +94,7 @@ class _VTUAppState extends State<VTUApp> with WidgetsBindingObserver {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         return MaterialApp(
-          title: 'A3TECH VTU APP',
+          title: 'AMAZCOM DATA',
           debugShowCheckedModeBanner: false,
           theme: ThemeConfig.lightTheme,
           darkTheme: ThemeConfig.darkTheme,

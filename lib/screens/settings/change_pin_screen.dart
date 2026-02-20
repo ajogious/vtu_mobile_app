@@ -17,30 +17,14 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
   String _oldPin = '';
   String _newPin = '';
   String _confirmPin = '';
-  int _currentStep = 0; // 0: old, 1: new, 2: confirm
+  int _currentStep = 0;
   bool _isLoading = false;
 
-  void _onOldPinCompleted(String pin) async {
+  void _onOldPinCompleted(String pin) {
     setState(() {
       _oldPin = pin;
+      _currentStep = 1;
     });
-
-    // Verify old PIN
-    final isValid = await StorageService().verifyPin(pin);
-
-    if (!mounted) return;
-
-    if (isValid) {
-      setState(() {
-        _currentStep = 1;
-      });
-    } else {
-      UiHelpers.showSnackBar(context, 'Incorrect PIN', isError: true);
-      // Clear and retry
-      setState(() {
-        _oldPin = '';
-      });
-    }
   }
 
   void _onNewPinCompleted(String pin) {
@@ -54,6 +38,7 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
     setState(() {
       _confirmPin = pin;
     });
+    _changePin();
   }
 
   Future<void> _changePin() async {
@@ -93,7 +78,6 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
       _isLoading = true;
     });
 
-    // Call API to change PIN
     final authService = context.read<AuthProvider>().authService;
     final result = await authService.api.changePin(
       oldPin: _oldPin,
@@ -107,19 +91,30 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
     });
 
     if (result.success) {
-      // Update PIN locally
       await StorageService().savePin(_newPin);
+
+      if (!mounted) return;
 
       UiHelpers.showSnackBar(context, result.message);
 
-      // Go back
+      await Future.delayed(const Duration(seconds: 1));
+
+      if (!mounted) return;
+
       Navigator.pop(context);
     } else {
-      UiHelpers.showSnackBar(
-        context,
-        result.error ?? 'Failed to change PIN',
-        isError: true,
-      );
+      final errorMsg = result.error ?? 'Failed to change PIN';
+      UiHelpers.showSnackBar(context, errorMsg, isError: true);
+
+      if (errorMsg.toLowerCase().contains('incorrect') ||
+          errorMsg.toLowerCase().contains('old pin')) {
+        setState(() {
+          _currentStep = 0;
+          _oldPin = '';
+          _newPin = '';
+          _confirmPin = '';
+        });
+      }
     }
   }
 
@@ -187,38 +182,42 @@ class _ChangePinScreenState extends State<ChangePinScreen> {
               ),
               const SizedBox(height: 40),
 
-              // PIN Input
+              // PIN Input — only ONE per step
               if (_currentStep == 0)
                 PinInput(
+                  key: const ValueKey('old_pin'),
                   length: 5,
                   obscureText: true,
                   onCompleted: _onOldPinCompleted,
                 )
               else if (_currentStep == 1)
                 PinInput(
+                  key: const ValueKey('new_pin'),
                   length: 5,
                   obscureText: true,
                   onCompleted: _onNewPinCompleted,
                 )
               else
                 PinInput(
+                  key: const ValueKey('confirm_pin'),
                   length: 5,
                   obscureText: true,
                   onCompleted: _onConfirmPinCompleted,
                 ),
+
               const SizedBox(height: 40),
 
-              // Submit button (only on last step)
+              // Submit button only on last step
               if (_currentStep == 2)
                 CustomButton(
                   text: 'Change PIN',
-                  onPressed: _changePin,
+                  onPressed: _confirmPin.length == 5 ? _changePin : null,
                   isLoading: _isLoading,
                 ),
 
               const SizedBox(height: 24),
 
-              // Info
+              // Info box
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(

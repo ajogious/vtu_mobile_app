@@ -1023,12 +1023,13 @@ class RealApiService implements ApiService {
         final statusCode = e.response?.statusCode;
         final data = e.response?.data;
 
-        if (statusCode == 401) {
-          return 'Session expired. Please login again.';
-        }
-
+        // Check response body message first
         if (data is Map && data['message'] != null) {
           return data['message'];
+        }
+
+        if (statusCode == 401) {
+          return 'Session expired. Please login again.';
         }
 
         return 'Server error: ${statusCode ?? 'Unknown'}';
