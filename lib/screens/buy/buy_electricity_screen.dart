@@ -14,7 +14,6 @@ import '../widgets/offline_banner.dart';
 import '../widgets/offline_purchase_blocker.dart';
 import '../../utils/ui_helpers.dart';
 import '../../utils/error_handler.dart';
-import '../../config/app_constants.dart';
 import '../../services/storage_service.dart';
 import '../../models/transaction_model.dart';
 import '../../utils/app_formatters.dart';
@@ -41,7 +40,9 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
   bool _isValidating = false;
   bool _isValidated = false;
   bool _isProcessing = false;
+  bool _loadingDiscos = true;
 
+  List<String> _discos = [];
   List<Map<String, String>> _beneficiaries = [];
   List<Transaction> _recentTransactions = [];
 
@@ -52,6 +53,7 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
     super.initState();
     _loadBeneficiaries();
     _loadRecentTransactions();
+    _loadDiscos();
   }
 
   @override
@@ -59,6 +61,38 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
     _meterController.dispose();
     _amountController.dispose();
     super.dispose();
+  }
+
+  Future<void> _loadDiscos() async {
+    final authService = context.read<AuthProvider>().authService;
+    final result = await authService.api.getElectricDiscos();
+
+    if (!mounted) return;
+
+    if (result.success && result.data != null) {
+      setState(() {
+        _discos = result.data!;
+        _loadingDiscos = false;
+      });
+    } else {
+      setState(() {
+        _discos = [
+          'PHEDC',
+          'IBEDC',
+          'AEDC',
+          'IKEDC',
+          'EKEDC',
+          'JEDC',
+          'KEDC',
+          'KAEDC',
+          'BEDC',
+          'EEDC',
+          'ABIA',
+          'YEDC',
+        ];
+        _loadingDiscos = false;
+      });
+    }
   }
 
   void _loadBeneficiaries() {
@@ -148,7 +182,7 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
     final authService = context.read<AuthProvider>().authService;
     final result = await authService.api.validateMeter(
       disco: _selectedDisco!,
-      meterType: _selectedMeterType!,
+      meterType: _selectedMeterType!.toLowerCase(),
       meterNumber: _meterController.text.trim(),
     );
 
@@ -185,7 +219,6 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
       _isValidated = false;
     });
 
-    // Auto-validate
     if (_selectedDisco != null &&
         _selectedMeterType != null &&
         _meterController.text.isNotEmpty) {
@@ -204,7 +237,6 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
       _amountController.text = NumberFormat('#,###').format(transaction.amount);
     });
 
-    // Auto-validate
     if (_selectedDisco != null &&
         _selectedMeterType != null &&
         _meterController.text.isNotEmpty) {
@@ -309,7 +341,6 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
   }
 
   Future<void> _buyElectricity() async {
-    // Check internet connection
     final isOnline = context.read<NetworkProvider>().isOnline;
     if (!isOnline) {
       ErrorHandler.handleOfflineMode(context);
@@ -321,14 +352,12 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
       _amountController.text.replaceAll(',', '').trim(),
     );
 
-    // Check balance
     final balance = context.read<WalletProvider>().balance;
     if (balance < amount) {
       ErrorHandler.handleInsufficientBalance(context, balance, amount);
       return;
     }
 
-    // Verify PIN
     final pinVerified = await showPinVerificationDialog(
       context,
       title: 'Enter PIN',
@@ -340,7 +369,6 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
       return;
     }
 
-    // Re-authentication for large amounts
     if (amount >= 10000) {
       final reAuthenticated = await requireReAuthentication(
         context,
@@ -361,7 +389,6 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
       _isProcessing = true;
     });
 
-    // Call API
     final authService = context.read<AuthProvider>().authService;
     final result = await authService.api.buyElectricity(
       disco: _selectedDisco!,
@@ -377,14 +404,11 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
     });
 
     if (result.success && result.data != null) {
-      // Save beneficiary if checked
       await _saveBeneficiaryToStorage();
 
-      // Update balance
       final walletProvider = context.read<WalletProvider>();
       walletProvider.deductBalance(amount);
 
-      // Create transaction
       final transaction = Transaction(
         id: result.data!['transaction_id'],
         type: TransactionType.electricity,
@@ -405,19 +429,15 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
         },
       );
 
-      // Add to history
       context.read<TransactionProvider>().addTransaction(transaction);
 
-      // Fire notification
       await NotificationService.transactionSuccess(transaction);
 
-      // Check low balance
       final newBalance = context.read<WalletProvider>().balance;
       if (newBalance < 500) {
         await NotificationService.lowBalance(newBalance);
       }
 
-      // Navigate to success screen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -447,7 +467,6 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Network offline warning
                   OfflineBanner(isOffline: !networkProvider.isOnline),
 
                   // DISCO Selector
@@ -458,37 +477,44 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    children: AppConstants.discos.map((disco) {
-                      final isSelected = _selectedDisco == disco;
-                      return ChoiceChip(
-                        label: Text(disco),
-                        selected: isSelected,
-                        onSelected: (selected) {
-                          if (selected) {
-                            setState(() {
-                              _selectedDisco = disco;
-                              _customerName = null;
-                              _customerAddress = null;
-                              _isValidated = false;
-                            });
-                          }
-                        },
-                        selectedColor: Theme.of(
-                          context,
-                        ).primaryColor.withOpacity(0.2),
-                        labelStyle: TextStyle(
-                          color: isSelected
-                              ? Theme.of(context).primaryColor
-                              : null,
-                          fontWeight: isSelected ? FontWeight.bold : null,
-                          fontSize: 12,
+                  _loadingDiscos
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 16),
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
+                      : Wrap(
+                          spacing: 8,
+                          runSpacing: 8,
+                          children: _discos.map((disco) {
+                            final isSelected = _selectedDisco == disco;
+                            return ChoiceChip(
+                              label: Text(disco),
+                              selected: isSelected,
+                              onSelected: (selected) {
+                                if (selected) {
+                                  setState(() {
+                                    _selectedDisco = disco;
+                                    _customerName = null;
+                                    _customerAddress = null;
+                                    _isValidated = false;
+                                  });
+                                }
+                              },
+                              selectedColor: Theme.of(
+                                context,
+                              ).primaryColor.withOpacity(0.2),
+                              labelStyle: TextStyle(
+                                color: isSelected
+                                    ? Theme.of(context).primaryColor
+                                    : null,
+                                fontWeight: isSelected ? FontWeight.bold : null,
+                                fontSize: 12,
+                              ),
+                            );
+                          }).toList(),
                         ),
-                      );
-                    }).toList(),
-                  ),
                   const SizedBox(height: 24),
 
                   // Meter Type Selector

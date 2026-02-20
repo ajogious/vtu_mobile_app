@@ -539,15 +539,11 @@ class RealApiService implements ApiService {
   Future<ApiResult<List<String>>> getElectricDiscos() async {
     try {
       final response = await _dio.get(ApiConfig.electricPlansEndpoint);
-
       final responseData = response.data;
 
-      if (responseData['ok'] == true || responseData['discos'] != null) {
-        final discos =
-            (responseData['discos'] as List?)
-                ?.map((e) => e.toString())
-                .toList() ??
-            [];
+      if (responseData['ok'] == true) {
+        final items = responseData['data']['items'] as List;
+        final discos = items.map((e) => e['code'].toString().trim()).toList();
         return ApiResult.success(discos);
       }
 
