@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../models/referral_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/referral_provider.dart';
 import '../../utils/ui_helpers.dart';
@@ -47,7 +48,6 @@ Use my referral code: $code
 
 Download now and start earning!'''
             .trim();
-
     Share.share(message);
   }
 
@@ -64,7 +64,6 @@ Use my referral code: *$code*
 
 Download now and start earning!'''
             .trim();
-
     Share.share(message);
   }
 
@@ -85,14 +84,13 @@ Use my referral code: $code
 
 Download now and start earning!'''
             .trim();
-
     Share.share(message);
   }
 
   @override
   Widget build(BuildContext context) {
     final user = context.watch<AuthProvider>().user;
-    final referralCode = user?.referralCode ?? '';
+    final referralCode = user?.referralCode ?? user?.username ?? '';
 
     return Scaffold(
       appBar: AppBar(title: const Text('Referrals'), centerTitle: true),
@@ -132,9 +130,6 @@ Download now and start earning!'''
                       style: TextStyle(color: Colors.white70, fontSize: 14),
                     ),
                     const SizedBox(height: 12),
-
-                    // FIX: use full-width column layout instead of a Row
-                    // that can overflow on small screens
                     Container(
                       width: double.infinity,
                       padding: const EdgeInsets.symmetric(
@@ -147,7 +142,6 @@ Download now and start earning!'''
                       ),
                       child: Column(
                         children: [
-                          // Referral code — scales down if too wide
                           FittedBox(
                             fit: BoxFit.scaleDown,
                             child: Text(
@@ -162,8 +156,6 @@ Download now and start earning!'''
                             ),
                           ),
                           const SizedBox(height: 12),
-
-                          // Copy button below the code — full width, never overflows
                           SizedBox(
                             width: double.infinity,
                             child: OutlinedButton.icon(
@@ -196,10 +188,9 @@ Download now and start earning!'''
                         ],
                       ),
                     ),
-
                     const SizedBox(height: 16),
                     const Text(
-                      'Share your code and earn ₦100 for each referral!',
+                      'Share your code and earn rewards for each referral!',
                       style: TextStyle(color: Colors.white, fontSize: 13),
                       textAlign: TextAlign.center,
                     ),
@@ -269,6 +260,33 @@ Download now and start earning!'''
                       child: Padding(
                         padding: EdgeInsets.all(32),
                         child: CircularProgressIndicator(),
+                      ),
+                    );
+                  }
+
+                  if (provider.error != null && provider.earnings.isEmpty) {
+                    return Center(
+                      child: Padding(
+                        padding: const EdgeInsets.all(32),
+                        child: Column(
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              size: 48,
+                              color: Colors.grey[400],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Failed to load referral data',
+                              style: TextStyle(color: Colors.grey[600]),
+                            ),
+                            const SizedBox(height: 12),
+                            TextButton(
+                              onPressed: _loadReferralData,
+                              child: const Text('Retry'),
+                            ),
+                          ],
+                        ),
                       ),
                     );
                   }
@@ -367,7 +385,7 @@ Download now and start earning!'''
                       if (provider.availableBalance < 500) ...[
                         const SizedBox(height: 8),
                         Text(
-                          'Minimum withdrawal amount is ₦500',
+                          'Minimum withdrawal amount is N500',
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 12,
@@ -434,6 +452,8 @@ Download now and start earning!'''
                             ],
                           ),
                         ),
+
+                      const SizedBox(height: 16),
                     ],
                   );
                 },
@@ -492,12 +512,11 @@ Download now and start earning!'''
                     style: TextStyle(color: Colors.grey[600], fontSize: 14),
                   ),
                   const SizedBox(height: 4),
-                  // FittedBox prevents long amounts from overflowing
                   FittedBox(
                     fit: BoxFit.scaleDown,
                     alignment: Alignment.centerLeft,
                     child: Text(
-                      '₦${NumberFormat('#,##0.00').format(amount)}',
+                      'N${NumberFormat('#,##0.00').format(amount)}',
                       style: const TextStyle(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
@@ -513,11 +532,8 @@ Download now and start earning!'''
     );
   }
 
-  Widget _buildEarningItem(Map<String, dynamic> earning) {
-    final amount = earning['amount'] as double;
-    final source = earning['source'] as String;
-    final date = earning['date'] as DateTime;
-
+  // FIXED: now accepts ReferralEarning object instead of Map
+  Widget _buildEarningItem(ReferralEarning earning) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
@@ -526,19 +542,21 @@ Download now and start earning!'''
           child: const Icon(Icons.add, color: Colors.green),
         ),
         title: Text(
-          source,
+          earning.source,
           style: const TextStyle(fontWeight: FontWeight.w600),
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
         ),
         subtitle: Text(
-          DateFormat('MMM dd, yyyy • hh:mm a').format(date),
+          DateFormat('MMM dd, yyyy • hh:mm a').format(earning.createdAt),
           style: const TextStyle(fontSize: 12),
         ),
         trailing: Text(
-          '+₦${NumberFormat('#,##0.00').format(amount)}',
+          '+N${NumberFormat('#,##0.00').format(earning.amount)}',
           style: const TextStyle(
             color: Colors.green,
             fontWeight: FontWeight.bold,
-            fontSize: 16,
+            fontSize: 14,
           ),
         ),
       ),

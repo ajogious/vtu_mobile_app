@@ -911,11 +911,16 @@ class RealApiService implements ApiService {
   Future<ApiResult<ReferralStats>> getReferralStats() async {
     try {
       final response = await _dio.get(ApiConfig.referralHistoryEndpoint);
-
       final responseData = response.data;
 
-      if (responseData['ok'] == true && responseData['stats'] != null) {
-        final stats = ReferralStats.fromJson(responseData['stats']);
+      if (responseData['ok'] == true) {
+        final data = responseData['data'];
+        final stats = ReferralStats(
+          totalEarnings: double.parse(data['ref_credit']?.toString() ?? '0'),
+          availableBalance: double.parse(data['ref_credit']?.toString() ?? '0'),
+          totalReferrals: data['count'] ?? 0,
+          activeReferrals: data['count'] ?? 0,
+        );
         return ApiResult.success(stats);
       }
 
@@ -933,15 +938,11 @@ class RealApiService implements ApiService {
   Future<ApiResult<List<ReferralEarning>>> getReferralHistory() async {
     try {
       final response = await _dio.get(ApiConfig.referralHistoryEndpoint);
-
       final responseData = response.data;
 
-      if (responseData['ok'] == true || responseData['earnings'] != null) {
-        final earnings =
-            (responseData['earnings'] as List?)
-                ?.map((e) => ReferralEarning.fromJson(e))
-                .toList() ??
-            [];
+      if (responseData['ok'] == true) {
+        final items = responseData['data']['items'] as List? ?? [];
+        final earnings = items.map((e) => ReferralEarning.fromJson(e)).toList();
         return ApiResult.success(earnings);
       }
 

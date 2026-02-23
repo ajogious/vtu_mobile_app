@@ -10,17 +10,6 @@ class ReferralStats {
     required this.totalReferrals,
     required this.activeReferrals,
   });
-
-  factory ReferralStats.fromJson(Map<String, dynamic> json) {
-    return ReferralStats(
-      totalEarnings: double.parse(json['total_earnings']?.toString() ?? '0'),
-      availableBalance: double.parse(
-        json['available_balance']?.toString() ?? '0',
-      ),
-      totalReferrals: json['total_referrals'] ?? 0,
-      activeReferrals: json['active_referrals'] ?? 0,
-    );
-  }
 }
 
 class ReferralEarning {
@@ -42,9 +31,40 @@ class ReferralEarning {
     return ReferralEarning(
       id: json['id'].toString(),
       amount: double.parse(json['amount']?.toString() ?? '0'),
-      source: json['source'] ?? '',
-      transactionId: json['transaction_id']?.toString() ?? '',
-      createdAt: DateTime.parse(json['created_at']),
+      source: json['description'] ?? '', // API returns "description"
+      transactionId: json['ref'] ?? '', // API returns "ref"
+      createdAt: _parseDate(json['date']), // API returns "date"
     );
+  }
+
+  // Handles API format: "29-12-2023 09:24:07 PM"
+  static DateTime _parseDate(String? dateStr) {
+    if (dateStr == null) return DateTime.now();
+    try {
+      return DateTime.parse(dateStr);
+    } catch (_) {
+      try {
+        final parts = dateStr.split(' ');
+        final dateParts = parts[0].split('-');
+        final timeParts = parts[1].split(':');
+        final isPm = parts[2].toUpperCase() == 'PM';
+
+        int hour = int.parse(timeParts[0]);
+        final minute = int.parse(timeParts[1]);
+
+        if (isPm && hour != 12) hour += 12;
+        if (!isPm && hour == 12) hour = 0;
+
+        return DateTime(
+          int.parse(dateParts[2]), // year
+          int.parse(dateParts[1]), // month
+          int.parse(dateParts[0]), // day
+          hour,
+          minute,
+        );
+      } catch (_) {
+        return DateTime.now();
+      }
+    }
   }
 }

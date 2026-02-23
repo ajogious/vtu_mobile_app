@@ -1,62 +1,61 @@
 import 'package:flutter/foundation.dart';
+import '../models/referral_model.dart';
+import '../providers/auth_provider.dart';
 
 class ReferralProvider with ChangeNotifier {
   double _totalEarnings = 0;
   double _availableBalance = 0;
   int _totalReferrals = 0;
-  List<Map<String, dynamic>> _earnings = [];
-  List<Map<String, dynamic>> _filteredEarnings = [];
+  List<ReferralEarning> _earnings = [];
+  List<ReferralEarning> _filteredEarnings = [];
   bool _isLoading = false;
+  String? _error;
+
+  AuthProvider? _authProvider;
+
+  void setAuthProvider(AuthProvider authProvider) {
+    _authProvider = authProvider;
+  }
 
   // Getters
   double get totalEarnings => _totalEarnings;
   double get availableBalance => _availableBalance;
   int get totalReferrals => _totalReferrals;
-  List<Map<String, dynamic>> get earnings => _earnings;
-  List<Map<String, dynamic>> get filteredEarnings => _filteredEarnings;
+  List<ReferralEarning> get earnings => _earnings;
+  List<ReferralEarning> get filteredEarnings => _filteredEarnings;
   bool get isLoading => _isLoading;
+  String? get error => _error;
 
   Future<void> fetchReferralData() async {
     _isLoading = true;
+    _error = null;
     notifyListeners();
 
-    // Simulate API call
-    await Future.delayed(const Duration(seconds: 1));
+    try {
+      // Fetch stats and history from same endpoint
+      final statsResult = await _authProvider?.authService.api
+          .getReferralStats();
+      final historyResult = await _authProvider?.authService.api
+          .getReferralHistory();
 
-    // Mock data - replace with actual API call
-    _totalEarnings = 1500;
-    _availableBalance = 800;
-    _totalReferrals = 15;
+      if (statsResult != null &&
+          statsResult.success &&
+          statsResult.data != null) {
+        final stats = statsResult.data!;
+        _totalEarnings = stats.totalEarnings;
+        _availableBalance = stats.availableBalance;
+        _totalReferrals = stats.totalReferrals;
+      }
 
-    _earnings = [
-      {
-        'amount': 100.0,
-        'source': 'Referral: John Doe',
-        'date': DateTime.now().subtract(const Duration(days: 1)),
-      },
-      {
-        'amount': 100.0,
-        'source': 'Referral: Jane Smith',
-        'date': DateTime.now().subtract(const Duration(days: 3)),
-      },
-      {
-        'amount': 100.0,
-        'source': 'Referral: Mike Johnson',
-        'date': DateTime.now().subtract(const Duration(days: 7)),
-      },
-      {
-        'amount': 100.0,
-        'source': 'Referral: Sarah Williams',
-        'date': DateTime.now().subtract(const Duration(days: 10)),
-      },
-      {
-        'amount': 100.0,
-        'source': 'Referral: David Brown',
-        'date': DateTime.now().subtract(const Duration(days: 15)),
-      },
-    ];
-
-    _filteredEarnings = List.from(_earnings);
+      if (historyResult != null &&
+          historyResult.success &&
+          historyResult.data != null) {
+        _earnings = historyResult.data!;
+        _filteredEarnings = List.from(_earnings);
+      }
+    } catch (e) {
+      _error = e.toString();
+    }
 
     _isLoading = false;
     notifyListeners();
@@ -67,15 +66,11 @@ class ReferralProvider with ChangeNotifier {
       _filteredEarnings = List.from(_earnings);
     } else {
       _filteredEarnings = _earnings.where((earning) {
-        final date = earning['date'] as DateTime;
-
-        if (start != null && date.isBefore(start)) return false;
-        if (end != null && date.isAfter(end)) return false;
-
+        if (start != null && earning.createdAt.isBefore(start)) return false;
+        if (end != null && earning.createdAt.isAfter(end)) return false;
         return true;
       }).toList();
     }
-
     notifyListeners();
   }
 
@@ -86,29 +81,13 @@ class ReferralProvider with ChangeNotifier {
     _isLoading = true;
     notifyListeners();
 
-    // Simulate API call
+    // TODO: wire up real withdrawal endpoint when available
     await Future.delayed(const Duration(seconds: 2));
 
     _availableBalance -= amount;
-
     _isLoading = false;
     notifyListeners();
 
     return true;
-  }
-
-  void addEarning(double amount, String source) {
-    _earnings.insert(0, {
-      'amount': amount,
-      'source': source,
-      'date': DateTime.now(),
-    });
-
-    _totalEarnings += amount;
-    _availableBalance += amount;
-    _totalReferrals++;
-
-    _filteredEarnings = List.from(_earnings);
-    notifyListeners();
   }
 }

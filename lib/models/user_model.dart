@@ -51,7 +51,7 @@ class User {
       referralCredit: _parseDouble(json['ref_credit']),
 
       // ⚠️ API uses "refer" not "referralCode"
-      referralCode: json['refer'] ?? json['referral_code'],
+      referralCode: json['username'] ?? '',
 
       // ⚠️ Convert "YES"/"NO" strings to bool
       kycVerified: _parseBool(json['kyc_verify'] ?? json['kyc_verified']),

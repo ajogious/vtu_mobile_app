@@ -50,7 +50,13 @@ class MyApp extends StatelessWidget {
             return transactionProvider;
           },
         ),
-        ChangeNotifierProvider(create: (_) => ReferralProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, ReferralProvider>(
+          create: (_) => ReferralProvider(),
+          update: (_, authProvider, referralProvider) {
+            referralProvider!.setAuthProvider(authProvider);
+            return referralProvider;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => AppLockProvider()),
       ],
       child: const VTUApp(),

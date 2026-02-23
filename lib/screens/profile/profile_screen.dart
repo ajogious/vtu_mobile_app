@@ -34,7 +34,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
     final success = await authProvider.refreshUser();
 
     if (success && mounted) {
-      // Sync wallet balance from refreshed user data
       final user = authProvider.user;
       if (user != null) {
         context.read<WalletProvider>().updateFromUser(user);
@@ -76,6 +75,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
           if (user == null) {
             return const Center(child: Text('User not logged in'));
           }
+
+          // Referral code is username per API design
+          final referralCode = user.referralCode ?? user.username;
 
           return RefreshIndicator(
             onRefresh: _refreshProfile,
@@ -320,13 +322,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
                                       ),
                                     ),
                                     const SizedBox(height: 4),
-                                    Text(
-                                      user.referralCode ?? 'N/A',
-                                      style: const TextStyle(
-                                        fontSize: 24,
-                                        fontWeight: FontWeight.bold,
-                                        letterSpacing: 2,
-                                        fontFamily: 'monospace',
+                                    // FittedBox prevents long usernames from overflowing
+                                    FittedBox(
+                                      fit: BoxFit.scaleDown,
+                                      alignment: Alignment.centerLeft,
+                                      child: Text(
+                                        referralCode,
+                                        style: const TextStyle(
+                                          fontSize: 24,
+                                          fontWeight: FontWeight.bold,
+                                          letterSpacing: 2,
+                                          fontFamily: 'monospace',
+                                        ),
                                       ),
                                     ),
                                   ],
@@ -334,17 +341,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               ),
                               IconButton(
                                 icon: const Icon(Icons.copy),
-                                onPressed: user.referralCode != null
-                                    ? () => _copyReferralCode(
-                                        context,
-                                        user.referralCode!,
-                                      )
-                                    : null,
+                                onPressed: () =>
+                                    _copyReferralCode(context, referralCode),
                                 tooltip: 'Copy code',
                               ),
                             ],
                           ),
                         ),
+
+                        const SizedBox(height: 16),
                       ],
                     ),
                   ),
