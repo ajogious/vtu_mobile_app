@@ -44,6 +44,8 @@ abstract class ApiService {
 
   Future<ApiResult<User>> getMe();
 
+  Future<ApiResult<String>> getNotice();
+
   Future<ApiResult<User>> updateProfile({
     required String firstname,
     required String lastname,

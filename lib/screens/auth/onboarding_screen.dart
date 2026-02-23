@@ -15,22 +15,26 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 
   final List<OnboardingPage> _pages = [
     OnboardingPage(
+      image: 'images/splash1.png',
       icon: Icons.phone_android,
       title: 'Buy Airtime & Data',
       description:
           'Purchase airtime and data bundles for all networks instantly',
     ),
     OnboardingPage(
+      image: 'images/splash2.png',
       icon: Icons.tv,
       title: 'Pay Bills Easily',
       description: 'Pay for cable TV, electricity, and exam pins with ease',
     ),
     OnboardingPage(
+      image: 'images/splash3.png',
       icon: Icons.wallet,
       title: 'Secure Wallet',
       description: 'Fund your wallet and enjoy secure transactions',
     ),
     OnboardingPage(
+      image: 'images/splash4.png',
       icon: Icons.people,
       title: 'Earn Rewards',
       description: 'Refer friends and earn commissions on their transactions',
@@ -66,118 +70,189 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
     final isSmallScreen = size.height < 700;
 
     return Scaffold(
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Skip button
-            Align(
-              alignment: Alignment.topRight,
-              child: TextButton(
-                onPressed: _navigateToLogin,
-                child: const Text('Skip'),
-              ),
-            ),
+      body: Stack(
+        children: [
+          // ── Full screen PageView with background images ──────────────
+          PageView.builder(
+            controller: _pageController,
+            onPageChanged: _onPageChanged,
+            itemCount: _pages.length,
+            itemBuilder: (context, index) {
+              return _buildPage(_pages[index], isSmallScreen);
+            },
+          ),
 
-            // PageView
-            Expanded(
-              child: PageView.builder(
-                controller: _pageController,
-                onPageChanged: _onPageChanged,
-                itemCount: _pages.length,
-                itemBuilder: (context, index) {
-                  return _buildPage(_pages[index]);
-                },
-              ),
-            ),
-
-            // Page indicator
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: List.generate(
-                _pages.length,
-                (index) => _buildDot(index),
-              ),
-            ),
-            SizedBox(height: isSmallScreen ? 20 : 40),
-
-            // Next/Get Started button
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
-              child: SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: () {
-                    if (_currentPage == _pages.length - 1) {
-                      _navigateToLogin();
-                    } else {
-                      _pageController.nextPage(
-                        duration: const Duration(milliseconds: 300),
-                        curve: Curves.easeInOut,
-                      );
-                    }
-                  },
-                  child: Text(
-                    _currentPage == _pages.length - 1 ? 'Get Started' : 'Next',
+          // ── Dark overlay for text readability ────────────────────────
+          Positioned.fill(
+            child: IgnorePointer(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.15),
+                      Colors.black.withOpacity(0.65),
+                    ],
                   ),
                 ),
               ),
             ),
-            SizedBox(height: isSmallScreen ? 20 : 40),
-          ],
-        ),
+          ),
+
+          // ── UI overlaid on top ────────────────────────────────────────
+          SafeArea(
+            child: Column(
+              children: [
+                // Skip button
+                Align(
+                  alignment: Alignment.topRight,
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
+                    child: TextButton(
+                      onPressed: _navigateToLogin,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        backgroundColor: Colors.black26,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 16,
+                          vertical: 8,
+                        ),
+                      ),
+                      child: const Text('Skip'),
+                    ),
+                  ),
+                ),
+
+                const Spacer(),
+
+                // Title & Description pinned to bottom over image
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  child: AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 300),
+                    child: Column(
+                      key: ValueKey(_currentPage),
+                      children: [
+                        // Icon badge
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withOpacity(0.15),
+                            shape: BoxShape.circle,
+                            border: Border.all(
+                              color: Colors.white.withOpacity(0.4),
+                              width: 2,
+                            ),
+                          ),
+                          child: Icon(
+                            _pages[_currentPage].icon,
+                            size: isSmallScreen ? 36 : 48,
+                            color: Colors.white,
+                          ),
+                        ),
+                        SizedBox(height: isSmallScreen ? 16 : 24),
+
+                        // Title
+                        Text(
+                          _pages[_currentPage].title,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: isSmallScreen ? 22 : 28,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        SizedBox(height: isSmallScreen ? 8 : 12),
+
+                        // Description
+                        Text(
+                          _pages[_currentPage].description,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.85),
+                            fontSize: isSmallScreen ? 14 : 16,
+                            height: 1.5,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                SizedBox(height: isSmallScreen ? 24 : 40),
+
+                // Page indicators
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: List.generate(
+                    _pages.length,
+                    (index) => _buildDot(index),
+                  ),
+                ),
+
+                SizedBox(height: isSmallScreen ? 20 : 32),
+
+                // Next / Get Started button
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: () {
+                        if (_currentPage == _pages.length - 1) {
+                          _navigateToLogin();
+                        } else {
+                          _pageController.nextPage(
+                            duration: const Duration(milliseconds: 300),
+                            curve: Curves.easeInOut,
+                          );
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.white,
+                        foregroundColor: Theme.of(context).primaryColor,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                      child: Text(
+                        _currentPage == _pages.length - 1
+                            ? 'Get Started'
+                            : 'Next',
+                        style: const TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                SizedBox(height: isSmallScreen ? 20 : 40),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 
-  Widget _buildPage(OnboardingPage page) {
-    final size = MediaQuery.of(context).size;
-    final isSmallScreen = size.height < 700;
-
-    return Padding(
-      padding: EdgeInsets.symmetric(
-        horizontal: 40,
-        vertical: isSmallScreen ? 16 : 40,
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          // Icon
-          Container(
-            width: isSmallScreen ? 90 : 120,
-            height: isSmallScreen ? 90 : 120,
-            decoration: BoxDecoration(
-              color: Theme.of(context).primaryColor.withOpacity(0.1),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              page.icon,
-              size: isSmallScreen ? 44 : 60,
-              color: Theme.of(context).primaryColor,
-            ),
-          ),
-          SizedBox(height: isSmallScreen ? 32 : 60),
-
-          // Title
-          Text(
-            page.title,
-            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-              fontWeight: FontWeight.bold,
-              fontSize: isSmallScreen ? 20 : null,
-            ),
-            textAlign: TextAlign.center,
-          ),
-          SizedBox(height: isSmallScreen ? 10 : 16),
-
-          // Description
-          Text(
-            page.description,
-            style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-              color: Colors.grey[600],
-              fontSize: isSmallScreen ? 14 : null,
-            ),
-            textAlign: TextAlign.center,
-          ),
-        ],
+  Widget _buildPage(OnboardingPage page, bool isSmallScreen) {
+    return SizedBox.expand(
+      child: Image.asset(
+        page.image,
+        fit: BoxFit.cover,
+        // Fallback color if image fails to load
+        errorBuilder: (context, error, stackTrace) =>
+            Container(color: Theme.of(context).primaryColor.withOpacity(0.1)),
       ),
     );
   }
@@ -190,8 +265,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       height: 8,
       decoration: BoxDecoration(
         color: _currentPage == index
-            ? Theme.of(context).primaryColor
-            : Colors.grey[300],
+            ? Colors.white
+            : Colors.white.withOpacity(0.4),
         borderRadius: BorderRadius.circular(4),
       ),
     );
@@ -199,11 +274,13 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
 }
 
 class OnboardingPage {
+  final String image;
   final IconData icon;
   final String title;
   final String description;
 
   OnboardingPage({
+    required this.image,
     required this.icon,
     required this.title,
     required this.description,

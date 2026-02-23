@@ -21,6 +21,7 @@ import '../transactions/transaction_list_screen.dart';
 import '../transactions/transaction_detail_screen.dart';
 import '../wallet/wallet_screen.dart';
 import '../wallet/fund_wallet_screen.dart';
+import '../widgets/notice_dialog.dart';
 import '../widgets/service_card.dart';
 import '../widgets/transaction_card.dart';
 import '../widgets/offline_banner.dart';
@@ -134,6 +135,23 @@ class _DashboardScreenState extends State<DashboardScreen> {
     await transactionProvider.fetchTransactions();
 
     _checkPinSetup();
+
+    await _showNoticeIfAny();
+  }
+
+  Future<void> _showNoticeIfAny() async {
+    try {
+      final authProvider = context.read<AuthProvider>();
+      final result = await authProvider.authService.api.getNotice();
+
+      if (!mounted) return;
+
+      if (result.success && result.data != null && result.data!.isNotEmpty) {
+        await NoticeDialog.show(context, result.data!);
+      }
+    } catch (_) {
+      // Silently fail — notice is not critical
+    }
   }
 
   // Updated pull-to-refresh — shows cached data notice when offline

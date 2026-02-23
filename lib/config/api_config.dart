@@ -18,6 +18,7 @@ class ApiConfig {
   static const String forgotPasswordEndpoint = '/auth/forgot-password.php';
   static const String verifyOtpEndpoint = '/auth/verify-otp.php';
   static const String resetPasswordEndpoint = '/auth/reset-password.php';
+  static const notificationsEndpoint = '/user/get-notice.php';
 
   // User endpoints
   static const String userProfileEndpoint = '/user/me.php';

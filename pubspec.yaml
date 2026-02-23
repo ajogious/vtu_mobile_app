@@ -1,5 +1,5 @@
 name: vtu_mobile
-description: A new Flutter project.
+description: A3TECH DATA - Fast & Reliable VTU Services
 
 publish_to: "none"
 
@@ -52,7 +52,6 @@ dependencies:
   printing: ^5.11.1
 
   # Payments
-  # flutter_paystack: ^1.5.0
   provider: ^6.1.5+1
   permission_handler: ^12.0.1
   flutter_contacts: ^1.1.9+2
@@ -76,13 +75,9 @@ flutter_launcher_icons:
   min_sdk_android: 21
   adaptive_icon_background: "#ffffff"
   adaptive_icon_foreground: "images/logo.jpg"
+  adaptive_icon_round: "images/logo.jpg"
 
 flutter:
   uses-material-design: true
   assets:
     - images/
-
-pdf: ^3.10.7
-printing: ^5.12.0
-path_provider: ^2.1.1
-package_info_plus: ^5.0.1

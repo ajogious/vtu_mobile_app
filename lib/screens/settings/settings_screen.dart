@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../config/app_constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/app_lock_provider.dart';
 import '../../providers/theme_provider.dart';
@@ -11,7 +12,6 @@ import '../beneficiaries/beneficiary_management_screen.dart';
 import 'change_password_screen.dart';
 import 'change_pin_screen.dart';
 import '../auth/login_screen.dart';
-import 'package:package_info_plus/package_info_plus.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -27,18 +27,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   bool _referralNotifications = true;
   bool _promotionalMessages = false;
   AutoLockDuration _autoLockDuration = AutoLockDuration.oneMinute;
-  String _appVersion = '';
 
   @override
   void initState() {
     super.initState();
     _loadSettings();
-    _loadAppVersion();
   }
 
   Future<void> _loadSettings() async {
     final storage = StorageService();
-
     setState(() {
       _biometricEnabled = storage.getBiometricEnabled();
       _transactionNotifications = storage.getNotificationPreference(
@@ -51,21 +48,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     });
   }
 
-  Future<void> _loadAppVersion() async {
-    final packageInfo = await PackageInfo.fromPlatform();
-    setState(() {
-      _appVersion = '${packageInfo.version} (${packageInfo.buildNumber})';
-    });
-  }
-
   Future<void> _toggleBiometric(bool value) async {
     final storage = StorageService();
     await storage.saveBiometricEnabled(value);
-
-    setState(() {
-      _biometricEnabled = value;
-    });
-
+    setState(() => _biometricEnabled = value);
     UiHelpers.showSnackBar(
       context,
       value ? 'Biometric enabled' : 'Biometric disabled',
@@ -75,7 +61,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _toggleNotification(String type, bool value) async {
     final storage = StorageService();
     await storage.saveNotificationPreference(type, value);
-
     setState(() {
       switch (type) {
         case 'transactions':
@@ -96,7 +81,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   void _showAutoLockOptions() {
     final lockProvider = context.read<AppLockProvider>();
-
     showModalBottomSheet(
       context: context,
       builder: (context) => Container(
@@ -119,9 +103,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     : null,
                 onTap: () async {
                   await lockProvider.setAutoLockDuration(duration);
-                  setState(() {
-                    _autoLockDuration = duration;
-                  });
+                  setState(() => _autoLockDuration = duration);
                   if (mounted) Navigator.pop(context);
                 },
               );
@@ -154,9 +136,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     if (confirmed == true && mounted) {
       await context.read<AuthProvider>().logout();
-
       if (!mounted) return;
-
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -171,7 +151,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(title: const Text('Settings'), centerTitle: true),
       body: ListView(
         children: [
-          // Appearance Section
+          // ── Appearance ──────────────────────────────────────────────────
           _buildSectionHeader('Appearance'),
           Consumer<ThemeProvider>(
             builder: (context, themeProvider, child) {
@@ -182,39 +162,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   themeProvider.isDarkMode ? Icons.dark_mode : Icons.light_mode,
                 ),
                 value: themeProvider.isDarkMode,
-                onChanged: (value) {
-                  themeProvider.toggleTheme();
-                },
+                onChanged: (_) => themeProvider.toggleTheme(),
               );
             },
           ),
           const Divider(),
 
-          // Security Section
+          // ── Security ────────────────────────────────────────────────────
           _buildSectionHeader('Security'),
           ListTile(
             leading: const Icon(Icons.lock),
             title: const Text('Change PIN'),
             subtitle: const Text('Update your transaction PIN'),
             trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ChangePinScreen()),
-              );
-            },
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ChangePinScreen()),
+            ),
           ),
           ListTile(
             leading: const Icon(Icons.password),
             title: const Text('Change Password'),
             subtitle: const Text('Update your login password'),
             trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
-              );
-            },
+            onTap: () => Navigator.push(
+              context,
+              MaterialPageRoute(builder: (_) => const ChangePasswordScreen()),
+            ),
           ),
           SwitchListTile(
             title: const Text('Biometric Authentication'),
@@ -236,7 +210,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(),
 
-          // Notifications Section
+          // ── Notifications ───────────────────────────────────────────────
           _buildSectionHeader('Notifications'),
           SwitchListTile(
             title: const Text('Transaction Notifications'),
@@ -268,7 +242,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(),
 
-          // Add after Security section, before About section:
+          // ── Beneficiaries ───────────────────────────────────────────────
           _buildSectionHeader('Beneficiaries'),
           ListTile(
             leading: const Icon(Icons.phone_android),
@@ -321,48 +295,49 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(),
 
-          // About Section
+          // ── About ───────────────────────────────────────────────────────
           _buildSectionHeader('About'),
           ListTile(
             leading: const Icon(Icons.info),
             title: const Text('App Version'),
-            subtitle: Text(_appVersion.isEmpty ? 'Loading...' : _appVersion),
+            subtitle: Text('v${AppConstants.appVersion}'),
           ),
           ListTile(
             leading: const Icon(Icons.email),
             title: const Text('Contact Support'),
-            subtitle: const Text('support@vtuapp.com'),
-            onTap: () {
-              // Open email client or support page
-            },
+            subtitle: Text(AppConstants.supportEmail),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => UiHelpers.launchEmail(AppConstants.supportEmail),
           ),
           ListTile(
             leading: const Icon(Icons.phone),
             title: const Text('Call Support'),
-            subtitle: const Text('+234 800 000 0000'),
-            onTap: () {
-              // Open phone dialer
-            },
+            subtitle: Text(AppConstants.supportPhone),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => UiHelpers.launchPhone(AppConstants.supportPhone),
+          ),
+          ListTile(
+            leading: const Icon(Icons.chat),
+            title: const Text('WhatsApp Support'),
+            subtitle: Text(AppConstants.supportWhatsApp),
+            trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+            onTap: () => UiHelpers.launchWhatsApp(AppConstants.supportWhatsApp),
           ),
           ListTile(
             leading: const Icon(Icons.description),
             title: const Text('Terms of Service'),
             trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () {
-              // Open terms page
-            },
+            onTap: () {},
           ),
           ListTile(
             leading: const Icon(Icons.privacy_tip),
             title: const Text('Privacy Policy'),
             trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () {
-              // Open privacy policy page
-            },
+            onTap: () {},
           ),
           const Divider(),
 
-          // Logout
+          // ── Logout ──────────────────────────────────────────────────────
           const SizedBox(height: 16),
           Padding(
             padding: const EdgeInsets.all(16),

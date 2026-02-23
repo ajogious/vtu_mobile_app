@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class UiHelpers {
   // Dismiss keyboard
@@ -29,8 +30,8 @@ class UiHelpers {
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => WillPopScope(
-        onWillPop: () async => false,
+      builder: (context) => PopScope(
+        canPop: false,
         child: AlertDialog(
           content: Row(
             children: [
@@ -94,6 +95,35 @@ class UiHelpers {
       ),
     );
     return result ?? false;
+  }
+
+  // Launch email client
+  static Future<void> launchEmail(String email) async {
+    final uri = Uri.parse('mailto:$email');
+    if (await canLaunchUrl(uri)) await launchUrl(uri);
+  }
+
+  // Launch phone dialer
+  static Future<void> launchPhone(String phone) async {
+    final uri = Uri.parse('tel:$phone');
+    if (await canLaunchUrl(uri)) await launchUrl(uri);
+  }
+
+  // Launch WhatsApp
+  static Future<void> launchWhatsApp(String phone) async {
+    final number = phone.replaceAll(RegExp(r'[^\d]'), '');
+    final uri = Uri.parse('https://wa.me/$number');
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
+  }
+
+  // Launch URL in browser
+  static Future<void> launchBrowser(String url) async {
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    }
   }
 
   // Spacing helpers

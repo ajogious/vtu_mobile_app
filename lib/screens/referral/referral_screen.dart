@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
+import '../../config/app_constants.dart';
 import '../../models/referral_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/referral_provider.dart';
@@ -54,7 +55,7 @@ Download now and start earning!'''
   void _shareViaWhatsApp(String code) {
     final message =
         '''
-🎉 Join VTU App and get amazing rewards!
+🎉 Join *${AppConstants.appName}* and get amazing rewards!
 
 Use my referral code: *$code*
 
@@ -62,27 +63,31 @@ Use my referral code: *$code*
 ✅ Pay bills instantly
 ✅ Earn while you refer
 
-Download now and start earning!'''
+Download now: ${AppConstants.appDownloadLink}
+  '''
             .trim();
     Share.share(message);
   }
 
   void _shareViaSMS(String code) {
-    Share.share('Join VTU App with my referral code: $code');
+    Share.share(
+      'Join ${AppConstants.appName} with my referral code: $code. Download: ${AppConstants.appDownloadLink}',
+    );
   }
 
   void _shareViaEmail(String code) {
     final message =
         '''
-Join VTU App and get amazing rewards!
+Join ${AppConstants.appName} and get amazing rewards!
 
 Use my referral code: $code
 
-✅ Buy airtime & data at best rates
-✅ Pay bills instantly
-✅ Earn while you refer
+${AppConstants.appTagline}
 
-Download now and start earning!'''
+Download now: ${AppConstants.appDownloadLink}
+
+Need help? Contact us at ${AppConstants.supportEmail}
+  '''
             .trim();
     Share.share(message);
   }

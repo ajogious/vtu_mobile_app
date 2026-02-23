@@ -1,5 +1,5 @@
 import 'api/api_service.dart';
-import 'api/mock_api_service.dart';
+// import 'api/mock_api_service.dart';
 import 'api/real_api_service.dart';
 import 'storage_service.dart';
 import '../core/api_result.dart';
@@ -10,7 +10,7 @@ class AuthService {
   final StorageService _storage = StorageService();
 
   AuthService({bool useMock = false}) {
-    _api = useMock ? MockApiService() : RealApiService();
+    _api = RealApiService();
   }
 
   // Login

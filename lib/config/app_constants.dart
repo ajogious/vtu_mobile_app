@@ -65,4 +65,14 @@ class AppConstants {
 
   // Session
   static const Duration sessionTimeout = Duration(minutes: 30);
+
+  // App Links
+  // static const String appPlayStoreLink =
+  //     'https://play.google.com/store/apps/details?id=com.a3tech.vtu';
+  // static const String appAppStoreLink =
+  //     'https://apps.apple.com/app/a3tech/id123456789';
+  static const String appDownloadLink =
+      'https://a3tech.com.ng/download'; // replace with your real link
+  static const String appTagline =
+      'Buy airtime & data at the best rates, pay bills instantly, and earn while you refer!';
 }

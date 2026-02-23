@@ -237,6 +237,26 @@ class RealApiService implements ApiService {
     }
   }
 
+  Future<ApiResult<String>> getNotice() async {
+    try {
+      final response = await _dio.get(ApiConfig.notificationsEndpoint);
+      final responseData = response.data;
+
+      if (responseData['ok'] == true) {
+        final notice2 = responseData['data']['notice2']?.toString() ?? '';
+        return ApiResult.success(notice2);
+      }
+
+      return ApiResult.failure(
+        responseData['message'] ?? 'Failed to get notice',
+      );
+    } on DioException catch (e) {
+      return ApiResult.failure(_handleDioError(e));
+    } catch (e) {
+      return ApiResult.failure(e.toString());
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // USER METHODS
   // ═══════════════════════════════════════════════════════════════════════════
