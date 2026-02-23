@@ -432,9 +432,8 @@ class MockApiService implements ApiService {
     await _delay();
 
     final types = [
-      ExamType(id: '1', name: 'WAEC', price: 800),
-      ExamType(id: '2', name: 'NECO', price: 800),
-      ExamType(id: '3', name: 'NABTEB', price: 800),
+      ExamType(examType: 'WAEC', price: 3500),
+      ExamType(examType: 'NECO', price: 1370),
     ];
 
     return ApiResult.success(types);
@@ -445,18 +444,20 @@ class MockApiService implements ApiService {
     await _delay();
 
     return ApiResult.success({
-      'MTN': [
-        {'id': '1', 'name': '1GB', 'price': 300},
-        {'id': '2', 'name': '2GB', 'price': 600},
-        {'id': '3', 'name': '5GB', 'price': 1500},
-      ],
-      'GLO': [
-        {'id': '4', 'name': '1GB', 'price': 270},
-        {'id': '5', 'name': '2GB', 'price': 540},
+      'server': 'EASYACCESS',
+      'items': [
+        {
+          'id': '1',
+          'network': 'MTN',
+          'network_type': 'CORPORATE GIFTING',
+          'plan': '1',
+          'size': 'GB',
+          'duration': 'Monthly',
+          'price': '30000',
+        },
       ],
     });
   }
-
   // ========== VALIDATION ==========
 
   @override

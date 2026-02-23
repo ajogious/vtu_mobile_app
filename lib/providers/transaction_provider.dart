@@ -1,13 +1,12 @@
 import 'package:flutter/foundation.dart';
 import '../models/transaction_model.dart';
+import '../providers/auth_provider.dart';
 import '../services/cache_service.dart';
 
 class TransactionProvider with ChangeNotifier {
   List<Transaction> _transactions = [];
   List<Transaction> _filteredTransactions = [];
   bool _isLoading = false;
-  final bool _hasMore = true;
-  int _currentPage = 1;
   String? _error;
 
   // Filters
@@ -18,15 +17,20 @@ class TransactionProvider with ChangeNotifier {
   DateTime? _endDate;
   String _searchQuery = '';
 
+  // Auth provider reference for API calls
+  AuthProvider? _authProvider;
+
+  void setAuthProvider(AuthProvider authProvider) {
+    _authProvider = authProvider;
+  }
+
   // Getters
   List<Transaction> get transactions => _filteredTransactions;
   List<Transaction> get allTransactions => _transactions;
   List<Transaction> get recentTransactions =>
       _filteredTransactions.take(5).toList();
   bool get isLoading => _isLoading;
-  bool get hasMore => _hasMore;
   String? get error => _error;
-  int get totalCount => _filteredTransactions.length;
 
   // Filter getters
   String get typeFilter => _typeFilter;
@@ -47,42 +51,39 @@ class TransactionProvider with ChangeNotifier {
   void addTransaction(Transaction transaction) {
     _transactions.insert(0, transaction);
     _applyFilters();
-
-    // Update cache with new transaction at the top
     CacheService.cacheTransactions(_transactions);
     notifyListeners();
   }
 
-  Future<bool> fetchTransactions({
-    int page = 1,
-    int limit = 10,
-    bool loadMore = false,
-  }) async {
+  Future<bool> fetchTransactions() async {
     if (_isLoading) return false;
 
-    if (!loadMore) {
-      _isLoading = true;
-      _currentPage = 1;
-      _error = null;
-      notifyListeners();
-    }
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
 
     try {
-      // Load from cache immediately for instant display on first load
-      if (!loadMore) {
-        final cached = CacheService.getCachedTransactions();
-        if (cached != null && _transactions.isEmpty) {
-          _transactions = cached;
-          _applyFilters();
-          notifyListeners();
-        }
+      // Show cached data immediately while fetching
+      final cached = CacheService.getCachedTransactions();
+      if (cached != null && _transactions.isEmpty) {
+        _transactions = cached;
+        _applyFilters();
+        notifyListeners();
       }
 
-      // Simulate API call — replace with real API call when ready
-      await Future.delayed(const Duration(milliseconds: 500));
+      // Call real API
+      final result = await _authProvider?.authService.api.getTransactions();
 
-      // Cache the latest transactions after a successful fetch
-      await CacheService.cacheTransactions(_transactions);
+      if (result != null && result.success && result.data != null) {
+        _transactions = result.data!.transactions;
+        await CacheService.cacheTransactions(_transactions);
+        _error = null;
+      } else {
+        // If API fails but we have cache, keep showing cache silently
+        if (_transactions.isEmpty) {
+          _error = result?.error ?? 'Failed to load transactions';
+        }
+      }
 
       _isLoading = false;
       _applyFilters();
@@ -90,17 +91,12 @@ class TransactionProvider with ChangeNotifier {
       return true;
     } catch (e) {
       _isLoading = false;
-      _error = e.toString();
+      if (_transactions.isEmpty) {
+        _error = e.toString();
+      }
       notifyListeners();
       return false;
     }
-  }
-
-  Future<void> loadMore() async {
-    if (_isLoading || !_hasMore) return;
-
-    _currentPage++;
-    await fetchTransactions(page: _currentPage, loadMore: true);
   }
 
   void setTypeFilter(String type) {
@@ -157,8 +153,11 @@ class TransactionProvider with ChangeNotifier {
         return false;
       }
 
-      // Network filter
-      if (_networkFilter != 'all' && transaction.network != _networkFilter) {
+      // Network filter — partial match since API networks can be "MTN_DATA SHARE"
+      if (_networkFilter != 'all' &&
+          !transaction.network.toLowerCase().contains(
+            _networkFilter.toLowerCase(),
+          )) {
         return false;
       }
 
@@ -169,9 +168,7 @@ class TransactionProvider with ChangeNotifier {
           _startDate!.month,
           _startDate!.day,
         );
-        if (transaction.createdAt.isBefore(startOfDay)) {
-          return false;
-        }
+        if (transaction.createdAt.isBefore(startOfDay)) return false;
       }
 
       if (_endDate != null) {
@@ -183,9 +180,7 @@ class TransactionProvider with ChangeNotifier {
           59,
           59,
         );
-        if (transaction.createdAt.isAfter(endOfDay)) {
-          return false;
-        }
+        if (transaction.createdAt.isAfter(endOfDay)) return false;
       }
 
       // Search filter
@@ -194,10 +189,12 @@ class TransactionProvider with ChangeNotifier {
         final beneficiary = transaction.beneficiary?.toLowerCase() ?? '';
         final reference = transaction.reference?.toLowerCase() ?? '';
         final network = transaction.network.toLowerCase();
+        final type = transaction.typeDisplayName.toLowerCase();
 
         if (!beneficiary.contains(query) &&
             !reference.contains(query) &&
-            !network.contains(query)) {
+            !network.contains(query) &&
+            !type.contains(query)) {
           return false;
         }
       }
@@ -206,7 +203,6 @@ class TransactionProvider with ChangeNotifier {
     }).toList();
   }
 
-  /// Populate the provider from a cached list of transactions (used when offline).
   void loadFromCache(List<Transaction> cached) {
     _transactions = cached;
     _applyFilters();
@@ -216,6 +212,7 @@ class TransactionProvider with ChangeNotifier {
   void clearTransactions() {
     _transactions.clear();
     _filteredTransactions.clear();
+    _error = null;
     notifyListeners();
   }
 }

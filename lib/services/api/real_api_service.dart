@@ -561,15 +561,11 @@ class RealApiService implements ApiService {
   Future<ApiResult<List<ExamType>>> getExamTypes() async {
     try {
       final response = await _dio.get(ApiConfig.examPlansEndpoint);
-
       final responseData = response.data;
 
-      if (responseData['ok'] == true || responseData['exam_types'] != null) {
-        final examTypes =
-            (responseData['exam_types'] as List?)
-                ?.map((e) => ExamType.fromJson(e))
-                .toList() ??
-            [];
+      if (responseData['ok'] == true) {
+        final items = responseData['data']['items'] as List;
+        final examTypes = items.map((e) => ExamType.fromJson(e)).toList();
         return ApiResult.success(examTypes);
       }
 
@@ -587,11 +583,14 @@ class RealApiService implements ApiService {
   Future<ApiResult<Map<String, dynamic>>> getDataCardPlans() async {
     try {
       final response = await _dio.get(ApiConfig.datacardPlansEndpoint);
-
       final responseData = response.data;
 
-      if (responseData['ok'] == true || responseData['plans'] != null) {
-        return ApiResult.success(Map<String, dynamic>.from(responseData));
+      if (responseData['ok'] == true) {
+        final items = responseData['data']['items'] as List;
+        return ApiResult.success({
+          'server': responseData['data']['server'],
+          'items': items,
+        });
       }
 
       return ApiResult.failure(
@@ -603,7 +602,6 @@ class RealApiService implements ApiService {
       return ApiResult.failure(e.toString());
     }
   }
-
   // ═══════════════════════════════════════════════════════════════════════════
   // VALIDATION METHODS
   // ═══════════════════════════════════════════════════════════════════════════
@@ -861,19 +859,10 @@ class RealApiService implements ApiService {
     String? search,
   }) async {
     try {
-      final queryParams = <String, dynamic>{'page': page, 'limit': limit};
-      if (type != null) queryParams['type'] = type;
-      if (status != null) queryParams['status'] = status;
-      if (search != null) queryParams['search'] = search;
-
-      final response = await _dio.get(
-        ApiConfig.transactionsEndpoint,
-        queryParameters: queryParams,
-      );
-
+      final response = await _dio.get(ApiConfig.transactionsEndpoint);
       final responseData = response.data;
 
-      if (responseData['ok'] == true || responseData['transactions'] != null) {
+      if (responseData['ok'] == true) {
         final paginated = PaginatedTransactions.fromJson(responseData);
         return ApiResult.success(paginated);
       }

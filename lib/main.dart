@@ -43,7 +43,13 @@ class MyApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => NetworkProvider()),
         ChangeNotifierProvider(create: (_) => WalletProvider()),
-        ChangeNotifierProvider(create: (_) => TransactionProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, TransactionProvider>(
+          create: (_) => TransactionProvider(),
+          update: (_, authProvider, transactionProvider) {
+            transactionProvider!.setAuthProvider(authProvider);
+            return transactionProvider;
+          },
+        ),
         ChangeNotifierProvider(create: (_) => ReferralProvider()),
         ChangeNotifierProvider(create: (_) => AppLockProvider()),
       ],
@@ -94,7 +100,7 @@ class _VTUAppState extends State<VTUApp> with WidgetsBindingObserver {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         return MaterialApp(
-          title: 'AMAZCOM DATA',
+          title: 'A3TECH DATA',
           debugShowCheckedModeBanner: false,
           theme: ThemeConfig.lightTheme,
           darkTheme: ThemeConfig.darkTheme,

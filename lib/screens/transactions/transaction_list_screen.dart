@@ -26,7 +26,6 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
   @override
   void initState() {
     super.initState();
-    _scrollController.addListener(_onScroll);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadTransactions();
     });
@@ -39,20 +38,12 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
     super.dispose();
   }
 
-  void _onScroll() {
-    if (_scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 200) {
-      _loadMore();
-    }
-  }
-
   Future<void> _loadTransactions() async {
     if (!mounted) return;
 
     final isOnline = context.read<NetworkProvider>().isOnline;
 
     if (!isOnline) {
-      // Serve from cache when offline
       final cached = CacheService.getCachedTransactions();
       if (cached != null) {
         context.read<TransactionProvider>().loadFromCache(cached);
@@ -67,10 +58,6 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
     }
 
     await context.read<TransactionProvider>().fetchTransactions();
-  }
-
-  Future<void> _loadMore() async {
-    await context.read<TransactionProvider>().loadMore();
   }
 
   Future<void> _showFilters() async {
@@ -148,7 +135,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
       ),
       body: Consumer<TransactionProvider>(
         builder: (context, provider, child) {
-          // Loading state (first load)
+          // Loading state
           if (provider.isLoading && provider.transactions.isEmpty) {
             return const Center(child: CircularProgressIndicator());
           }
@@ -181,9 +168,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
               title: 'No Transactions',
               message: 'Your transaction history will appear here.',
               actionText: 'Make a Purchase',
-              onAction: () {
-                Navigator.pop(context);
-              },
+              onAction: () => Navigator.pop(context),
             );
           }
 
@@ -192,7 +177,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
             onRefresh: _loadTransactions,
             child: Column(
               children: [
-                // Offline/cache banner — shown at the top of the list
+                // Offline/cache banner
                 OfflineContentBanner(
                   cachedAt: CacheService.getTransactionsTime(),
                 ),
@@ -232,7 +217,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                   ),
 
                 // Transaction count
-                Container(
+                Padding(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 12,
@@ -240,7 +225,7 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                   child: Row(
                     children: [
                       Text(
-                        '${provider.totalCount} transaction${provider.totalCount != 1 ? 's' : ''}',
+                        '${provider.transactions.length} transaction${provider.transactions.length != 1 ? 's' : ''}',
                         style: TextStyle(
                           color: Colors.grey[600],
                           fontSize: 14,
@@ -256,18 +241,8 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
                   child: ListView.builder(
                     controller: _scrollController,
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount:
-                        provider.transactions.length +
-                        (provider.hasMore ? 1 : 0),
+                    itemCount: provider.transactions.length,
                     itemBuilder: (context, index) {
-                      // Load more indicator
-                      if (index == provider.transactions.length) {
-                        return const Padding(
-                          padding: EdgeInsets.all(16),
-                          child: Center(child: CircularProgressIndicator()),
-                        );
-                      }
-
                       final transaction = provider.transactions[index];
                       return TransactionCard(
                         transaction: transaction,

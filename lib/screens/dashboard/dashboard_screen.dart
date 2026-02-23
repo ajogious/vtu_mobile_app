@@ -125,23 +125,14 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final walletProvider = context.read<WalletProvider>();
     final transactionProvider = context.read<TransactionProvider>();
 
-    // Refresh user data from API
     await authProvider.refreshUser();
     if (authProvider.user != null) {
       walletProvider.updateFromUser(authProvider.user!);
     }
 
     await walletProvider.fetchBalance();
-    final success = await transactionProvider.fetchTransactions(
-      page: 1,
-      limit: 5,
-    );
-    // Debug print
-    print('Transactions fetched: $success');
-    print('Transaction count: ${transactionProvider.transactions.length}');
-    print('Recent count: ${transactionProvider.recentTransactions.length}');
+    await transactionProvider.fetchTransactions();
 
-    // Check PIN setup after user data is loaded
     _checkPinSetup();
   }
 
@@ -166,7 +157,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
       context.read<TransactionProvider>().fetchTransactions(),
     ]);
 
-    // Sync wallet from refreshed user
     if (authProvider.user != null && mounted) {
       context.read<WalletProvider>().updateFromUser(authProvider.user!);
     }

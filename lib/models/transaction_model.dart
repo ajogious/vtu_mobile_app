@@ -43,13 +43,13 @@ class Transaction {
   factory Transaction.fromJson(Map<String, dynamic> json) {
     return Transaction(
       id: json['id'].toString(),
-      type: _parseTransactionType(json['type']),
+      type: _parseTransactionType(json['service'] ?? json['type']),
       network: json['network'] ?? '',
       amount: double.parse(json['amount']?.toString() ?? '0'),
       status: _parseStatus(json['status']),
-      createdAt: DateTime.parse(json['created_at']),
+      createdAt: _parseDate(json['time'] ?? json['created_at']),
       beneficiary: json['beneficiary'],
-      reference: json['reference'],
+      reference: json['transactionID'] ?? json['reference'],
       balanceBefore: json['balance_before'] != null
           ? double.parse(json['balance_before'].toString())
           : null,
@@ -76,34 +76,78 @@ class Transaction {
     };
   }
 
+  static DateTime _parseDate(String? dateStr) {
+    if (dateStr == null) return DateTime.now();
+    try {
+      // ISO format (local/mock transactions)
+      return DateTime.parse(dateStr);
+    } catch (_) {
+      try {
+        // API format: "10-02-2026 04:22 PM"
+        final parts = dateStr.split(' ');
+        final dateParts = parts[0].split('-');
+        final timeParts = parts[1].split(':');
+        final isPm = parts[2].toUpperCase() == 'PM';
+
+        int hour = int.parse(timeParts[0]);
+        final minute = int.parse(timeParts[1]);
+
+        if (isPm && hour != 12) hour += 12;
+        if (!isPm && hour == 12) hour = 0;
+
+        return DateTime(
+          int.parse(dateParts[2]), // year
+          int.parse(dateParts[1]), // month
+          int.parse(dateParts[0]), // day
+          hour,
+          minute,
+        );
+      } catch (_) {
+        return DateTime.now();
+      }
+    }
+  }
+
   static TransactionType _parseTransactionType(String? type) {
     switch (type?.toLowerCase()) {
       case 'airtime':
+      case 'airtime purchase':
         return TransactionType.airtime;
       case 'data':
+      case 'data purchase':
         return TransactionType.data;
       case 'cable':
+      case 'cable subscription':
         return TransactionType.cable;
       case 'electricity':
       case 'electric':
+      case 'electricity purchase':
         return TransactionType.electricity;
       case 'exam_pin':
       case 'exam':
+      case 'exam pin':
+      case 'exam pin purchase':
         return TransactionType.examPin;
       case 'datacard':
       case 'data_card':
+      case 'data card':
+      case 'data card purchase':
         return TransactionType.dataCard;
       case 'wallet_funding':
       case 'wallet':
       case 'funding':
+      case 'wallet credit':
         return TransactionType.walletFunding;
       case 'atc':
       case 'airtime_to_cash':
+      case 'airtime to cash':
         return TransactionType.atc;
       case 'referral':
       case 'referral_withdrawal':
+      case 'referral withdrawal':
         return TransactionType.referralWithdrawal;
       case 'referral_bonus':
+      case 'referral bonus':
         return TransactionType.referralBonus;
       default:
         return TransactionType.airtime;
@@ -170,14 +214,18 @@ class PaginatedTransactions {
   });
 
   factory PaginatedTransactions.fromJson(Map<String, dynamic> json) {
+    // Handle both real API format and mock format
+    final data = json['data'] ?? json;
+    final transactionsList = data['transactions'] as List? ?? [];
+
     return PaginatedTransactions(
-      transactions: (json['transactions'] as List)
+      transactions: transactionsList
           .map((t) => Transaction.fromJson(t))
           .toList(),
-      currentPage: json['pagination']['current_page'] ?? 1,
-      totalPages: json['pagination']['total_pages'] ?? 1,
-      perPage: json['pagination']['per_page'] ?? 10,
-      totalRecords: json['pagination']['total_records'] ?? 0,
+      currentPage: 1,
+      totalPages: 1,
+      perPage: data['limit'] ?? 50,
+      totalRecords: transactionsList.length,
     );
   }
 

@@ -5,7 +5,6 @@ import '../../providers/auth_provider.dart';
 import '../../providers/wallet_provider.dart';
 import '../../providers/network_provider.dart';
 import '../../providers/transaction_provider.dart';
-import '../widgets/network_selector.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_textfield.dart';
 import '../widgets/pin_verification_dialog.dart';
@@ -18,6 +17,41 @@ import '../../models/transaction_model.dart';
 import '../../services/notification_service.dart';
 import 'datacard_success_screen.dart';
 
+class DataCardPlan {
+  final String id;
+  final String network;
+  final String networkType;
+  final String plan;
+  final String size;
+  final String duration;
+  final double price;
+
+  DataCardPlan({
+    required this.id,
+    required this.network,
+    required this.networkType,
+    required this.plan,
+    required this.size,
+    required this.duration,
+    required this.price,
+  });
+
+  factory DataCardPlan.fromJson(Map<String, dynamic> json) {
+    return DataCardPlan(
+      id: json['id'].toString(),
+      network: json['network'] ?? '',
+      networkType: json['network_type'] ?? '',
+      plan: json['plan'] ?? '',
+      size: json['size'] ?? '',
+      duration: json['duration'] ?? '',
+      price: double.parse(json['price']?.toString() ?? '0'),
+    );
+  }
+
+  String get displayName => '${plan}${size}';
+  String get displayLabel => '$network - ${plan}${size} (${networkType})';
+}
+
 class BuyDatacardScreen extends StatefulWidget {
   const BuyDatacardScreen({super.key});
 
@@ -29,29 +63,20 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
 
-  String? _selectedNetwork;
-  String? _selectedDenomination;
+  DataCardPlan? _selectedPlan;
   int _quantity = 1;
   bool _isProcessing = false;
+  bool _isLoadingPlans = true;
+  List<DataCardPlan> _plans = [];
 
-  final Map<String, Map<String, double>> _denominationPrices = {
-    'MTN': {'1GB': 500, '2GB': 950, '5GB': 2300},
-    'GLO': {'1GB': 450, '2GB': 850, '5GB': 2100},
-    'AIRTEL': {'1GB': 480, '2GB': 900, '5GB': 2200},
-    '9MOBILE': {'1GB': 470, '2GB': 880, '5GB': 2150},
-  };
-
-  List<String> get _availableDenominations {
-    if (_selectedNetwork == null) return [];
-    return _denominationPrices[_selectedNetwork]!.keys.toList();
-  }
-
-  double get _pricePerCard {
-    if (_selectedNetwork == null || _selectedDenomination == null) return 0;
-    return _denominationPrices[_selectedNetwork]![_selectedDenomination]!;
-  }
-
+  double get _pricePerCard => _selectedPlan?.price ?? 0;
   double get _totalAmount => _pricePerCard * _quantity;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadPlans();
+  }
 
   @override
   void dispose() {
@@ -59,11 +84,27 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
     super.dispose();
   }
 
-  void _onNetworkSelected(String network) {
-    setState(() {
-      _selectedNetwork = network;
-      _selectedDenomination = null;
-    });
+  Future<void> _loadPlans() async {
+    setState(() => _isLoadingPlans = true);
+
+    final authService = context.read<AuthProvider>().authService;
+    final result = await authService.api.getDataCardPlans();
+
+    if (!mounted) return;
+
+    if (result.success && result.data != null) {
+      final items = result.data!['items'] as List;
+      setState(() {
+        _plans = items.map((e) => DataCardPlan.fromJson(e)).toList();
+        _isLoadingPlans = false;
+      });
+    } else {
+      setState(() => _isLoadingPlans = false);
+      ErrorHandler.handleApiError(
+        context,
+        result.error ?? 'Failed to load data card plans',
+      );
+    }
   }
 
   Future<void> _showConfirmationDialog() async {
@@ -71,17 +112,8 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
 
     if (!_formKey.currentState!.validate()) return;
 
-    if (_selectedNetwork == null) {
-      UiHelpers.showSnackBar(context, 'Please select a network', isError: true);
-      return;
-    }
-
-    if (_selectedDenomination == null) {
-      UiHelpers.showSnackBar(
-        context,
-        'Please select denomination',
-        isError: true,
-      );
+    if (_selectedPlan == null) {
+      UiHelpers.showSnackBar(context, 'Please select a plan', isError: true);
       return;
     }
 
@@ -93,8 +125,10 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildConfirmRow('Network', _selectedNetwork!),
-            _buildConfirmRow('Denomination', _selectedDenomination!),
+            _buildConfirmRow('Network', _selectedPlan!.network),
+            _buildConfirmRow('Plan', _selectedPlan!.displayName),
+            _buildConfirmRow('Type', _selectedPlan!.networkType),
+            _buildConfirmRow('Duration', _selectedPlan!.duration),
             _buildConfirmRow('Name on Card', _nameController.text.trim()),
             _buildConfirmRow(
               'Quantity',
@@ -153,26 +187,23 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
   }
 
   Future<void> _buyDatacard() async {
-    // Check internet connection
     final isOnline = context.read<NetworkProvider>().isOnline;
     if (!isOnline) {
       ErrorHandler.handleOfflineMode(context);
       return;
     }
 
-    // Check balance
     final balance = context.read<WalletProvider>().balance;
     if (balance < _totalAmount) {
       ErrorHandler.handleInsufficientBalance(context, balance, _totalAmount);
       return;
     }
 
-    // Verify PIN
     final pinVerified = await showPinVerificationDialog(
       context,
       title: 'Enter PIN',
       subtitle:
-          'Authorize purchase of $_quantity $_selectedNetwork $_selectedDenomination data card${_quantity > 1 ? 's' : ''}',
+          'Authorize purchase of $_quantity ${_selectedPlan!.displayName} data card${_quantity > 1 ? 's' : ''}',
     );
 
     if (!pinVerified) {
@@ -180,7 +211,6 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
       return;
     }
 
-    // Re-authentication for large amounts
     if (_totalAmount >= 10000) {
       final reAuthenticated = await requireReAuthentication(
         context,
@@ -197,35 +227,26 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
       }
     }
 
-    setState(() {
-      _isProcessing = true;
-    });
+    setState(() => _isProcessing = true);
 
-    // Call API
     final authService = context.read<AuthProvider>().authService;
-    final cardId = '${_selectedNetwork!}_${_selectedDenomination!}';
     final result = await authService.api.buyDataCard(
-      cardId: cardId,
+      cardId: _selectedPlan!.id,
       quantity: _quantity,
       pincode: '12345',
     );
 
     if (!mounted) return;
 
-    setState(() {
-      _isProcessing = false;
-    });
+    setState(() => _isProcessing = false);
 
     if (result.success && result.data != null) {
-      // Update balance
-      final walletProvider = context.read<WalletProvider>();
-      walletProvider.deductBalance(_totalAmount);
+      context.read<WalletProvider>().deductBalance(_totalAmount);
 
-      // Create transaction
       final transaction = Transaction(
         id: result.data!['transaction_id'],
         type: TransactionType.dataCard,
-        network: _selectedNetwork!,
+        network: _selectedPlan!.network,
         amount: _totalAmount,
         status: TransactionStatus.success,
         createdAt: DateTime.now(),
@@ -234,26 +255,23 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
         balanceBefore: result.data!['balance'] + _totalAmount,
         balanceAfter: result.data!['balance'],
         metadata: {
-          'denomination': _selectedDenomination!,
+          'plan': _selectedPlan!.displayName,
+          'network_type': _selectedPlan!.networkType,
+          'duration': _selectedPlan!.duration,
           'quantity': _quantity.toString(),
           'name_on_card': _nameController.text.trim(),
           'pins': result.data!['pins'],
         },
       );
 
-      // Add to history
       context.read<TransactionProvider>().addTransaction(transaction);
-
-      // Fire notification
       await NotificationService.transactionSuccess(transaction);
 
-      // Check low balance
       final newBalance = context.read<WalletProvider>().balance;
       if (newBalance < 500) {
         await NotificationService.lowBalance(newBalance);
       }
 
-      // Navigate to success screen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -283,33 +301,42 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Network offline warning
                   OfflineBanner(isOffline: !networkProvider.isOnline),
 
-                  // Network Selector
-                  NetworkSelector(
-                    selectedNetwork: _selectedNetwork,
-                    onNetworkSelected: _onNetworkSelected,
+                  // Plans list
+                  Text(
+                    'Select Plan',
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
+                  const SizedBox(height: 12),
+
+                  if (_isLoadingPlans)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (_plans.isEmpty)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: TextButton.icon(
+                          onPressed: _loadPlans,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Failed to load. Tap to retry'),
+                        ),
+                      ),
+                    )
+                  else
+                    ..._plans.map((plan) => _buildPlanCard(plan)),
+
                   const SizedBox(height: 24),
 
-                  // Denomination Selector
-                  if (_selectedNetwork != null) ...[
-                    Text(
-                      'Select Denomination',
-                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    ..._availableDenominations.map((denomination) {
-                      return _buildDenominationCard(denomination);
-                    }),
-                    const SizedBox(height: 24),
-                  ],
-
-                  // Name on Card
-                  if (_selectedDenomination != null) ...[
+                  // Name on Card — only shown after selecting a plan
+                  if (_selectedPlan != null) ...[
                     CustomTextField(
                       controller: _nameController,
                       labelText: 'Name on Card',
@@ -347,11 +374,7 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
                         children: [
                           IconButton(
                             onPressed: _quantity > 1
-                                ? () {
-                                    setState(() {
-                                      _quantity--;
-                                    });
-                                  }
+                                ? () => setState(() => _quantity--)
                                 : null,
                             icon: const Icon(Icons.remove_circle_outline),
                             iconSize: 32,
@@ -376,11 +399,7 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
                           ),
                           IconButton(
                             onPressed: _quantity < 50
-                                ? () {
-                                    setState(() {
-                                      _quantity++;
-                                    });
-                                  }
+                                ? () => setState(() => _quantity++)
                                 : null,
                             icon: const Icon(Icons.add_circle_outline),
                             iconSize: 32,
@@ -396,7 +415,7 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
                     ),
                     const SizedBox(height: 32),
 
-                    // Total Amount Display
+                    // Total Amount
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -446,7 +465,6 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
                     ),
                     const SizedBox(height: 32),
 
-                    // Buy Button
                     OfflinePurchaseBlocker(
                       serviceName: 'data cards',
                       child: CustomButton(
@@ -467,16 +485,14 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
     );
   }
 
-  Widget _buildDenominationCard(String denomination) {
-    final isSelected = _selectedDenomination == denomination;
-    final price = _denominationPrices[_selectedNetwork]![denomination]!;
+  Widget _buildPlanCard(DataCardPlan plan) {
+    final isSelected = _selectedPlan?.id == plan.id;
 
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedDenomination = denomination;
-        });
-      },
+      onTap: () => setState(() {
+        _selectedPlan = plan;
+        _quantity = 1; // reset quantity on plan change
+      }),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
@@ -508,7 +524,7 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    denomination,
+                    '${plan.network} ${plan.displayName}',
                     style: TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 18,
@@ -517,14 +533,18 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
                   ),
                   const SizedBox(height: 4),
                   Text(
-                    '$_selectedNetwork Data Card',
+                    plan.networkType,
                     style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                  ),
+                  Text(
+                    plan.duration,
+                    style: TextStyle(color: Colors.grey[500], fontSize: 12),
                   ),
                 ],
               ),
             ),
             Text(
-              '₦${NumberFormat('#,##0').format(price)}',
+              '₦${NumberFormat('#,##0').format(plan.price)}',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
                 fontSize: 18,

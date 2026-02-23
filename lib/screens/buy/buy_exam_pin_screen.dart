@@ -5,6 +5,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/wallet_provider.dart';
 import '../../providers/network_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../models/exam_type_model.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/pin_verification_dialog.dart';
 import '../widgets/loading_overlay.dart';
@@ -12,7 +13,6 @@ import '../widgets/offline_banner.dart';
 import '../widgets/offline_purchase_blocker.dart';
 import '../../utils/ui_helpers.dart';
 import '../../utils/error_handler.dart';
-import '../../config/app_constants.dart';
 import '../../models/transaction_model.dart';
 import '../../services/notification_service.dart';
 import 'exam_pin_success_screen.dart';
@@ -27,17 +27,44 @@ class BuyExamPinScreen extends StatefulWidget {
 class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
   final _formKey = GlobalKey<FormState>();
 
-  String? _selectedExamType;
+  ExamType? _selectedExamType;
   int _quantity = 1;
   bool _isProcessing = false;
+  bool _isLoadingPlans = true;
+  List<ExamType> _examPlans = [];
 
-  final double _pricePerPin = 800; // From AppConstants
-
+  double get _pricePerPin => _selectedExamType?.price ?? 0;
   double get _totalAmount => _pricePerPin * _quantity;
 
-  Future<void> _showConfirmationDialog() async {
-    if (!_formKey.currentState!.validate()) return;
+  @override
+  void initState() {
+    super.initState();
+    _loadExamPlans();
+  }
 
+  Future<void> _loadExamPlans() async {
+    setState(() => _isLoadingPlans = true);
+
+    final authService = context.read<AuthProvider>().authService;
+    final result = await authService.api.getExamTypes();
+
+    if (!mounted) return;
+
+    if (result.success && result.data != null) {
+      setState(() {
+        _examPlans = result.data!;
+        _isLoadingPlans = false;
+      });
+    } else {
+      setState(() => _isLoadingPlans = false);
+      ErrorHandler.handleApiError(
+        context,
+        result.error ?? 'Failed to load exam plans',
+      );
+    }
+  }
+
+  Future<void> _showConfirmationDialog() async {
     if (_selectedExamType == null) {
       UiHelpers.showSnackBar(context, 'Please select exam type', isError: true);
       return;
@@ -51,7 +78,7 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _buildConfirmRow('Exam Type', _selectedExamType!),
+            _buildConfirmRow('Exam Type', _selectedExamType!.examType),
             _buildConfirmRow(
               'Quantity',
               '$_quantity pin${_quantity > 1 ? 's' : ''}',
@@ -125,7 +152,7 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
       context,
       title: 'Enter PIN',
       subtitle:
-          'Authorize purchase of $_quantity $_selectedExamType pin${_quantity > 1 ? 's' : ''}',
+          'Authorize purchase of $_quantity ${_selectedExamType!.examType} pin${_quantity > 1 ? 's' : ''}',
     );
 
     if (!pinVerified) {
@@ -150,34 +177,28 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
       }
     }
 
-    setState(() {
-      _isProcessing = true;
-    });
+    setState(() => _isProcessing = true);
 
-    // Call API
     final authService = context.read<AuthProvider>().authService;
     final result = await authService.api.buyExamPin(
-      examType: _selectedExamType!,
+      examType: _selectedExamType!.examType,
       quantity: _quantity,
       pincode: '12345',
     );
 
     if (!mounted) return;
 
-    setState(() {
-      _isProcessing = false;
-    });
+    setState(() => _isProcessing = false);
 
     if (result.success && result.data != null) {
       // Update balance
-      final walletProvider = context.read<WalletProvider>();
-      walletProvider.deductBalance(_totalAmount);
+      context.read<WalletProvider>().deductBalance(_totalAmount);
 
       // Create transaction
       final transaction = Transaction(
         id: result.data!['transaction_id'],
         type: TransactionType.examPin,
-        network: _selectedExamType!,
+        network: _selectedExamType!.examType,
         amount: _totalAmount,
         status: TransactionStatus.success,
         createdAt: DateTime.now(),
@@ -233,7 +254,6 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Network offline warning
                   OfflineBanner(isOffline: !networkProvider.isOnline),
 
                   // Exam Type Selector
@@ -244,35 +264,57 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  ...AppConstants.examTypes.map((exam) {
-                    return _buildExamTypeCard(exam);
-                  }),
+
+                  // Loading / error / list states
+                  if (_isLoadingPlans)
+                    const Center(
+                      child: Padding(
+                        padding: EdgeInsets.symmetric(vertical: 24),
+                        child: CircularProgressIndicator(),
+                      ),
+                    )
+                  else if (_examPlans.isEmpty)
+                    Center(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 24),
+                        child: TextButton.icon(
+                          onPressed: _loadExamPlans,
+                          icon: const Icon(Icons.refresh),
+                          label: const Text('Failed to load. Tap to retry'),
+                        ),
+                      ),
+                    )
+                  else
+                    ..._examPlans.map((plan) => _buildExamTypeCard(plan)),
+
                   const SizedBox(height: 24),
 
-                  // Price Info
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.blue[50],
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(Icons.info_outline, color: Colors.blue[700]),
-                        const SizedBox(width: 12),
-                        Expanded(
-                          child: Text(
-                            'Price: ₦${NumberFormat('#,##0').format(_pricePerPin)} per pin',
-                            style: TextStyle(
-                              color: Colors.blue[900],
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
+                  // Price Info — only shown when a plan is selected
+                  if (_selectedExamType != null)
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.info_outline, color: Colors.blue[700]),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Text(
+                              'Price: ₦${NumberFormat('#,##0').format(_pricePerPin)} per pin',
+                              style: TextStyle(
+                                color: Colors.blue[900],
+                                fontWeight: FontWeight.bold,
+                                fontSize: 16,
+                              ),
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
+
                   const SizedBox(height: 24),
 
                   // Quantity Selector
@@ -294,11 +336,7 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
                       children: [
                         IconButton(
                           onPressed: _quantity > 1
-                              ? () {
-                                  setState(() {
-                                    _quantity--;
-                                  });
-                                }
+                              ? () => setState(() => _quantity--)
                               : null,
                           icon: const Icon(Icons.remove_circle_outline),
                           iconSize: 32,
@@ -323,11 +361,7 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
                         ),
                         IconButton(
                           onPressed: _quantity < 50
-                              ? () {
-                                  setState(() {
-                                    _quantity++;
-                                  });
-                                }
+                              ? () => setState(() => _quantity++)
                               : null,
                           icon: const Icon(Icons.add_circle_outline),
                           iconSize: 32,
@@ -374,7 +408,9 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          '$_quantity pin${_quantity > 1 ? 's' : ''} × ₦${NumberFormat('#,##0').format(_pricePerPin)}',
+                          _selectedExamType != null
+                              ? '$_quantity pin${_quantity > 1 ? 's' : ''} × ₦${NumberFormat('#,##0').format(_pricePerPin)}'
+                              : 'Select an exam type above',
                           style: const TextStyle(
                             color: Colors.white70,
                             fontSize: 14,
@@ -390,7 +426,8 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
                     serviceName: 'exam pins',
                     child: CustomButton(
                       text: 'Continue',
-                      onPressed: networkProvider.isOnline
+                      onPressed:
+                          networkProvider.isOnline && _selectedExamType != null
                           ? _showConfirmationDialog
                           : null,
                       isLoading: _isProcessing,
@@ -405,15 +442,11 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
     );
   }
 
-  Widget _buildExamTypeCard(String examType) {
-    final isSelected = _selectedExamType == examType;
+  Widget _buildExamTypeCard(ExamType plan) {
+    final isSelected = _selectedExamType?.examType == plan.examType;
 
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedExamType = examType;
-        });
-      },
+      onTap: () => setState(() => _selectedExamType = plan),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
@@ -432,23 +465,33 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
         child: Row(
           children: [
             Radio<String>(
-              value: examType,
-              groupValue: _selectedExamType,
-              onChanged: (value) {
-                setState(() {
-                  _selectedExamType = value;
-                });
-              },
+              value: plan.examType,
+              groupValue: _selectedExamType?.examType,
+              onChanged: (_) => setState(() => _selectedExamType = plan),
             ),
             const SizedBox(width: 12),
             Expanded(
-              child: Text(
-                examType,
-                style: TextStyle(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 18,
-                  color: isSelected ? Theme.of(context).primaryColor : null,
-                ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    plan.examType,
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 18,
+                      color: isSelected ? Theme.of(context).primaryColor : null,
+                    ),
+                  ),
+                  Text(
+                    '₦${NumberFormat('#,##0').format(plan.price)} per pin',
+                    style: TextStyle(
+                      fontSize: 13,
+                      color: isSelected
+                          ? Theme.of(context).primaryColor
+                          : Colors.grey[600],
+                    ),
+                  ),
+                ],
               ),
             ),
             Icon(

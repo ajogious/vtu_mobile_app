@@ -29,27 +29,12 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
     'examPin',
     'dataCard',
     'walletFunding',
+    'atc',
+    'referralWithdrawal',
+    'referralBonus',
   ];
 
   final List<String> _statuses = ['all', 'success', 'pending', 'failed'];
-
-  final List<String> _networks = [
-    'all',
-    'MTN',
-    'GLO',
-    'AIRTEL',
-    '9MOBILE',
-    'DSTV',
-    'GOTV',
-    'STARTIMES',
-    'EKEDC',
-    'IKEDC',
-    'AEDC',
-    'PHED',
-    'WAEC',
-    'NECO',
-    'NABTEB',
-  ];
 
   final List<String> _dateRanges = [
     'all',
@@ -58,6 +43,9 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
     'last30days',
     'custom',
   ];
+
+  // Built dynamically from real transactions
+  List<String> _networks = ['all'];
 
   @override
   void initState() {
@@ -69,12 +57,40 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
     _selectedDateRange = _getDateRangeKey(provider);
     _customStartDate = provider.startDate;
     _customEndDate = provider.endDate;
+    _buildNetworkList(provider);
+  }
+
+  // Build network list from actual transaction data
+  void _buildNetworkList(TransactionProvider provider) {
+    final networks =
+        provider.allTransactions
+            .map((t) => _extractBaseNetwork(t.network))
+            .toSet()
+            .toList()
+          ..sort();
+    setState(() {
+      _networks = ['all', ...networks];
+    });
+  }
+
+  // Extract base network from values like "MTN_DATA SHARE" → "MTN"
+  String _extractBaseNetwork(String network) {
+    if (network.startsWith('MTN')) return 'MTN';
+    if (network.startsWith('GLO')) return 'GLO';
+    if (network.startsWith('AIRTEL')) return 'AIRTEL';
+    if (network.startsWith('9MOBILE')) return '9MOBILE';
+    if (network.startsWith('DSTV')) return 'DSTV';
+    if (network.startsWith('GOTV')) return 'GOTV';
+    if (network.startsWith('STARTIMES')) return 'STARTIMES';
+    if (network.startsWith('WAEC')) return 'WAEC';
+    if (network.startsWith('NECO')) return 'NECO';
+    if (network.startsWith('Wallet')) return 'Wallet';
+    if (network.startsWith('Referral')) return 'Referral';
+    return network; // fallback: use as-is
   }
 
   String _getDateRangeKey(TransactionProvider provider) {
-    if (provider.startDate == null && provider.endDate == null) {
-      return 'all';
-    }
+    if (provider.startDate == null && provider.endDate == null) return 'all';
 
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -86,19 +102,13 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
         provider.startDate!.day,
       );
 
-      if (start == today && provider.endDate == null) {
-        return 'today';
-      }
+      if (start == today && provider.endDate == null) return 'today';
 
       final last7 = today.subtract(const Duration(days: 6));
-      if (start == last7 && provider.endDate == null) {
-        return 'last7days';
-      }
+      if (start == last7 && provider.endDate == null) return 'last7days';
 
       final last30 = today.subtract(const Duration(days: 29));
-      if (start == last30 && provider.endDate == null) {
-        return 'last30days';
-      }
+      if (start == last30 && provider.endDate == null) return 'last30days';
     }
 
     return 'custom';
@@ -107,16 +117,10 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
   void _applyFilters() {
     final provider = context.read<TransactionProvider>();
 
-    // Apply type filter
     provider.setTypeFilter(_selectedType);
-
-    // Apply status filter
     provider.setStatusFilter(_selectedStatus);
-
-    // Apply network filter
     provider.setNetworkFilter(_selectedNetwork);
 
-    // Apply date filter
     DateTime? startDate;
     DateTime? endDate;
 
@@ -143,7 +147,6 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
     }
 
     provider.setDateRange(startDate, endDate);
-
     Navigator.pop(context);
   }
 
@@ -219,7 +222,6 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
           ),
           const Divider(),
 
-          // Filters
           Expanded(
             child: SingleChildScrollView(
               padding: const EdgeInsets.all(16),
@@ -235,11 +237,10 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
                       value: range,
                       groupValue: _selectedDateRange,
                       onChanged: (value) {
-                        setState(() {
-                          _selectedDateRange = value!;
-                        });
+                        setState(() => _selectedDateRange = value!);
                       },
                       contentPadding: EdgeInsets.zero,
+                      dense: true,
                     );
                   }),
 
@@ -292,11 +293,7 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
                       return ChoiceChip(
                         label: Text(_getTypeLabel(type)),
                         selected: isSelected,
-                        onSelected: (selected) {
-                          setState(() {
-                            _selectedType = type;
-                          });
-                        },
+                        onSelected: (_) => setState(() => _selectedType = type),
                       );
                     }).toList(),
                   ),
@@ -308,23 +305,21 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 8,
+                    runSpacing: 8,
                     children: _statuses.map((status) {
                       final isSelected = _selectedStatus == status;
                       return ChoiceChip(
                         label: Text(_getStatusLabel(status)),
                         selected: isSelected,
-                        onSelected: (selected) {
-                          setState(() {
-                            _selectedStatus = status;
-                          });
-                        },
+                        onSelected: (_) =>
+                            setState(() => _selectedStatus = status),
                       );
                     }).toList(),
                   ),
 
                   const SizedBox(height: 24),
 
-                  // Network
+                  // Network — built from real transaction data
                   _buildSectionTitle('Network/Provider'),
                   const SizedBox(height: 8),
                   Wrap(
@@ -337,14 +332,13 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
                           network == 'all' ? 'All Networks' : network,
                         ),
                         selected: isSelected,
-                        onSelected: (selected) {
-                          setState(() {
-                            _selectedNetwork = network;
-                          });
-                        },
+                        onSelected: (_) =>
+                            setState(() => _selectedNetwork = network),
                       );
                     }).toList(),
                   ),
+
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
@@ -405,6 +399,12 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
         return 'Data Card';
       case 'walletFunding':
         return 'Wallet Funding';
+      case 'atc':
+        return 'Airtime to Cash';
+      case 'referralWithdrawal':
+        return 'Referral Withdrawal';
+      case 'referralBonus':
+        return 'Referral Bonus';
       default:
         return type;
     }

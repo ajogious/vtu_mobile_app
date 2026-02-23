@@ -1,19 +1,17 @@
 class ExamType {
-  final String id;
-  final String name;
+  final String examType;
   final double price;
 
-  ExamType({required this.id, required this.name, required this.price});
+  ExamType({required this.examType, required this.price});
 
   factory ExamType.fromJson(Map<String, dynamic> json) {
     return ExamType(
-      id: json['id'].toString(),
-      name: json['name'] ?? '',
-      price: double.parse(json['price']?.toString() ?? '0'),
+      examType: json['exam_type'] ?? '',
+      price: (json['price'] as num?)?.toDouble() ?? 0,
     );
   }
 
   Map<String, dynamic> toJson() {
-    return {'id': id, 'name': name, 'price': price};
+    return {'exam_type': examType, 'price': price};
   }
 }
