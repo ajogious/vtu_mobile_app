@@ -882,13 +882,14 @@ class RealApiService implements ApiService {
     try {
       final response = await _dio.get(
         ApiConfig.transactionDetailEndpoint,
-        queryParameters: {'id': id},
+        queryParameters: {'transaction_id': id},
       );
 
       final responseData = response.data;
 
-      if (responseData['ok'] == true && responseData['transaction'] != null) {
-        final transaction = Transaction.fromJson(responseData['transaction']);
+      if (responseData['ok'] == true) {
+        final tx = responseData['data']['transaction'];
+        final transaction = Transaction.fromJson(tx);
         return ApiResult.success(transaction);
       }
 

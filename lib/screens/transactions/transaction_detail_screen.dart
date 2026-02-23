@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/intl.dart';
+import 'package:provider/provider.dart';
 import '../../models/transaction_model.dart';
+import '../../providers/auth_provider.dart';
 import '../../utils/ui_helpers.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/receipt_generator.dart';
@@ -17,11 +19,47 @@ class TransactionDetailScreen extends StatefulWidget {
 }
 
 class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
+  late Transaction _transaction;
+  bool _isLoadingDetail = false;
   final Set<int> _revealedPins = {};
   bool _showAllPins = false;
 
+  @override
+  void initState() {
+    super.initState();
+    _transaction = widget.transaction;
+    _fetchDetail();
+  }
+
+  Future<void> _fetchDetail() async {
+    // Need the transactionID (provider reference) not the database id
+    final transactionID = widget.transaction.reference;
+    if (transactionID == null || transactionID.isEmpty) {
+      setState(() => _isLoadingDetail = false);
+      return;
+    }
+
+    setState(() => _isLoadingDetail = true);
+
+    final authProvider = context.read<AuthProvider>();
+    final result = await authProvider.authService.api.getTransactionDetail(
+      transactionID,
+    );
+
+    if (!mounted) return;
+
+    if (result.success && result.data != null) {
+      setState(() {
+        _transaction = result.data!;
+        _isLoadingDetail = false;
+      });
+    } else {
+      setState(() => _isLoadingDetail = false);
+    }
+  }
+
   Color _getStatusColor() {
-    switch (widget.transaction.status) {
+    switch (_transaction.status) {
       case TransactionStatus.success:
         return Colors.green;
       case TransactionStatus.pending:
@@ -32,12 +70,18 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   String _getStatusLabel() {
-    return widget.transaction.status.name[0].toUpperCase() +
-        widget.transaction.status.name.substring(1);
+    switch (_transaction.status) {
+      case TransactionStatus.success:
+        return 'Successful';
+      case TransactionStatus.pending:
+        return 'Pending';
+      case TransactionStatus.failed:
+        return 'Failed';
+    }
   }
 
   IconData _getTypeIcon() {
-    switch (widget.transaction.type) {
+    switch (_transaction.type) {
       case TransactionType.airtime:
         return Icons.phone_android;
       case TransactionType.data:
@@ -57,13 +101,12 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       case TransactionType.referralBonus:
         return Icons.card_giftcard;
       case TransactionType.referralWithdrawal:
-        // TODO: Handle this case.
-        throw UnimplementedError();
+        return Icons.savings;
     }
   }
 
   String _getTypeLabel() {
-    switch (widget.transaction.type) {
+    switch (_transaction.type) {
       case TransactionType.airtime:
         return 'Airtime Purchase';
       case TransactionType.data:
@@ -83,8 +126,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
       case TransactionType.referralBonus:
         return 'Referral Bonus';
       case TransactionType.referralWithdrawal:
-        // TODO: Handle this case.
-        throw UnimplementedError();
+        return 'Referral Withdrawal';
     }
   }
 
@@ -116,7 +158,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   List<Map<String, dynamic>> _getPins() {
-    final pinsData = widget.transaction.metadata?['pins'];
+    final pinsData = _transaction.metadata?['pins'];
     if (pinsData is List) {
       return List<Map<String, dynamic>>.from(pinsData);
     }
@@ -125,7 +167,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
 
   Future<void> _generateReceipt() async {
     try {
-      await ReceiptGenerator.generateAndShare(context, widget.transaction);
+      await ReceiptGenerator.generateAndShare(context, _transaction);
+      if (mounted) {
+        UiHelpers.showSnackBar(context, 'Receipt saved to Downloads folder');
+      }
     } catch (e) {
       UiHelpers.showSnackBar(
         context,
@@ -144,8 +189,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         title: const Text('Transaction Details'),
         centerTitle: true,
         actions: [
-          if (widget.transaction.type == TransactionType.examPin ||
-              widget.transaction.type == TransactionType.dataCard)
+          if (_transaction.type == TransactionType.examPin ||
+              _transaction.type == TransactionType.dataCard)
             IconButton(
               icon: Icon(
                 _showAllPins ? Icons.visibility_off : Icons.visibility,
@@ -172,9 +217,9 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               child: Column(
                 children: [
                   Icon(
-                    widget.transaction.status == TransactionStatus.success
+                    _transaction.status == TransactionStatus.success
                         ? Icons.check_circle
-                        : widget.transaction.status == TransactionStatus.pending
+                        : _transaction.status == TransactionStatus.pending
                         ? Icons.access_time
                         : Icons.error,
                     size: 64,
@@ -191,7 +236,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   ),
                   const SizedBox(height: 8),
                   Text(
-                    '₦${NumberFormat('#,##0.00').format(widget.transaction.amount)}',
+                    '₦${NumberFormat('#,##0.00').format(_transaction.amount)}',
                     style: const TextStyle(
                       color: Colors.white,
                       fontSize: 36,
@@ -239,7 +284,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                                 ),
                                 const SizedBox(height: 4),
                                 Text(
-                                  widget.transaction.network,
+                                  _transaction.network,
                                   style: TextStyle(
                                     color: Colors.grey[600],
                                     fontSize: 14,
@@ -265,23 +310,25 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
                               const Text(
-                                'Reference Number',
+                                'Provider Reference',
                                 style: TextStyle(
                                   color: Colors.grey,
                                   fontSize: 14,
                                 ),
                               ),
-                              IconButton(
-                                icon: const Icon(Icons.copy, size: 20),
-                                onPressed: () => _copyToClipboard(
-                                  widget.transaction.reference ?? '',
-                                  'Reference',
+                              if (_transaction.reference != null &&
+                                  _transaction.reference!.isNotEmpty)
+                                IconButton(
+                                  icon: const Icon(Icons.copy, size: 20),
+                                  onPressed: () => _copyToClipboard(
+                                    _transaction.reference!,
+                                    'Reference',
+                                  ),
                                 ),
-                              ),
                             ],
                           ),
                           Text(
-                            widget.transaction.reference ?? 'N/A',
+                            _transaction.reference ?? 'N/A',
                             style: const TextStyle(
                               fontSize: 16,
                               fontWeight: FontWeight.bold,
@@ -301,41 +348,73 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Text(
-                            'Transaction Details',
-                            style: TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                'Transaction Details',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              // Loading indicator while fetching full details
+                              if (_isLoadingDetail)
+                                const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                ),
+                            ],
                           ),
                           const SizedBox(height: 16),
                           _buildDetailRow(
                             'Date & Time',
                             DateFormat(
-                              'MMM dd, yyyy • hh:mm:ss a',
-                            ).format(widget.transaction.createdAt),
+                              'MMM dd, yyyy • hh:mm a',
+                            ).format(_transaction.createdAt),
                           ),
-                          if (widget.transaction.beneficiary != null) ...[
+                          if (_transaction.metadata?['description'] !=
+                              null) ...[
+                            const Divider(height: 24),
+                            _buildDetailRow(
+                              'Description',
+                              _transaction.metadata!['description'],
+                            ),
+                          ],
+                          if (_transaction.beneficiary != null &&
+                              _transaction.beneficiary!.isNotEmpty) ...[
                             const Divider(height: 24),
                             _buildDetailRow(
                               'Beneficiary',
-                              widget.transaction.beneficiary!,
+                              _transaction.beneficiary!,
+                            ),
+                          ],
+                          const Divider(height: 24),
+                          _buildDetailRow('Transaction ID', _transaction.id),
+                          if (_transaction.reference != null &&
+                              _transaction.reference!.isNotEmpty) ...[
+                            const Divider(height: 24),
+                            _buildDetailRow(
+                              'Provider Reference',
+                              _transaction.reference!,
                             ),
                           ],
                           const Divider(height: 24),
                           _buildDetailRow(
-                            'Transaction ID',
-                            widget.transaction.id,
-                          ),
-                          const Divider(height: 24),
-                          _buildDetailRow(
                             'Balance Before',
-                            '₦${NumberFormat('#,##0.00').format(widget.transaction.balanceBefore)}',
+                            _transaction.balanceBefore != null
+                                ? '₦${NumberFormat('#,##0.00').format(_transaction.balanceBefore)}'
+                                : 'N/A',
                           ),
                           const Divider(height: 24),
                           _buildDetailRow(
                             'Balance After',
-                            '₦${NumberFormat('#,##0.00').format(widget.transaction.balanceAfter)}',
+                            _transaction.balanceAfter != null
+                                ? '₦${NumberFormat('#,##0.00').format(_transaction.balanceAfter)}'
+                                : 'N/A',
                           ),
                         ],
                       ),
@@ -344,32 +423,35 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                   const SizedBox(height: 16),
 
                   // Electricity Token
-                  if (widget.transaction.type == TransactionType.electricity &&
-                      widget.transaction.metadata?['token'] != null) ...[
+                  if (_transaction.type == TransactionType.electricity &&
+                      _transaction.metadata?['token'] != null &&
+                      _transaction.metadata!['token']
+                          .toString()
+                          .isNotEmpty) ...[
                     _buildTokenCard(),
                     const SizedBox(height: 16),
                   ],
 
                   // Exam Pins
-                  if (widget.transaction.type == TransactionType.examPin &&
+                  if (_transaction.type == TransactionType.examPin &&
                       _getPins().isNotEmpty) ...[
                     _buildPinsCard('Exam Pins'),
                     const SizedBox(height: 16),
                   ],
 
                   // Data Cards
-                  if (widget.transaction.type == TransactionType.dataCard &&
+                  if (_transaction.type == TransactionType.dataCard &&
                       _getPins().isNotEmpty) ...[
                     _buildPinsCard('Data Cards'),
                     const SizedBox(height: 16),
                   ],
 
                   // Additional Metadata
-                  if (widget.transaction.metadata != null &&
-                      widget.transaction.metadata!.isNotEmpty) ...[
+                  if (_transaction.metadata != null &&
+                      _transaction.metadata!.isNotEmpty)
                     _buildMetadataCard(),
-                    const SizedBox(height: 16),
-                  ],
+
+                  const SizedBox(height: 16),
 
                   // Action Buttons
                   CustomButton(
@@ -383,6 +465,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                     isOutlined: true,
                     onPressed: () => Navigator.pop(context),
                   ),
+                  const SizedBox(height: 16),
                 ],
               ),
             ),
@@ -411,8 +494,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Widget _buildTokenCard() {
-    final token = widget.transaction.metadata?['token'] ?? '';
-    final units = widget.transaction.metadata?['units'] ?? '0';
+    final token = _transaction.metadata?['token'] ?? '';
+    final units = _transaction.metadata?['units'] ?? '0';
 
     return Card(
       color: Colors.orange[50],
@@ -492,9 +575,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             ),
             const SizedBox(height: 16),
             ...pins.asMap().entries.map((entry) {
-              final index = entry.key;
-              final pin = entry.value;
-              return _buildPinItem(index, pin);
+              return _buildPinItem(entry.key, entry.value);
             }),
           ],
         ),
@@ -577,13 +658,15 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Widget _buildMetadataCard() {
-    final metadata = widget.transaction.metadata!;
+    final metadata = _transaction.metadata!;
     final displayData = Map<String, dynamic>.from(metadata);
 
-    // Remove pins and token as they're displayed separately
+    // Remove fields already displayed elsewhere
     displayData.remove('pins');
     displayData.remove('token');
     displayData.remove('units');
+    displayData.remove('description');
+    displayData.remove('response');
 
     if (displayData.isEmpty) return const SizedBox.shrink();
 
@@ -601,11 +684,8 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
             ...displayData.entries.map((entry) {
               final label = entry.key
                   .split('_')
-                  .map((word) {
-                    return word[0].toUpperCase() + word.substring(1);
-                  })
+                  .map((word) => word[0].toUpperCase() + word.substring(1))
                   .join(' ');
-
               return Padding(
                 padding: const EdgeInsets.only(bottom: 12),
                 child: _buildDetailRow(label, entry.value.toString()),

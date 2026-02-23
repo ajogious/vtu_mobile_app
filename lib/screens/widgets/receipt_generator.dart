@@ -1,12 +1,15 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:intl/intl.dart';
+import 'package:permission_handler/permission_handler.dart';
 
 import '../../models/transaction_model.dart';
+import '../../config/app_constants.dart';
 
 class ReceiptGenerator {
   static Future<void> generateAndShare(
@@ -60,6 +63,10 @@ class ReceiptGenerator {
   static Future<pw.Document> _generatePDF(Transaction transaction) async {
     final pdf = pw.Document();
 
+    // Load logo from assets
+    final logoBytes = await rootBundle.load('images/logo.jpg');
+    final logoImage = pw.MemoryImage(logoBytes.buffer.asUint8List());
+
     pdf.addPage(
       pw.Page(
         pageFormat: PdfPageFormat.a4,
@@ -67,56 +74,86 @@ class ReceiptGenerator {
           return pw.Column(
             crossAxisAlignment: pw.CrossAxisAlignment.start,
             children: [
-              // Header
-              pw.Container(
-                padding: const pw.EdgeInsets.all(20),
-                decoration: pw.BoxDecoration(
-                  color: PdfColor.fromHex('#2196F3'),
-                  borderRadius: pw.BorderRadius.circular(8),
-                ),
+              // Header with logo centered at top
+              pw.Center(
                 child: pw.Column(
-                  crossAxisAlignment: pw.CrossAxisAlignment.start,
                   children: [
+                    // Round logo
+                    pw.Container(
+                      width: 80,
+                      height: 80,
+                      decoration: pw.BoxDecoration(
+                        shape: pw.BoxShape.circle,
+                        border: pw.Border.all(
+                          color: PdfColor.fromHex('#2196F3'),
+                          width: 2,
+                        ),
+                      ),
+                      child: pw.ClipOval(
+                        child: pw.Image(logoImage, fit: pw.BoxFit.cover),
+                      ),
+                    ),
+                    pw.SizedBox(height: 12),
                     pw.Text(
-                      'VTU APP',
+                      AppConstants.appName,
                       style: pw.TextStyle(
-                        color: PdfColors.white,
-                        fontSize: 24,
+                        fontSize: 20,
                         fontWeight: pw.FontWeight.bold,
+                        color: PdfColor.fromHex('#2196F3'),
                       ),
                     ),
                     pw.SizedBox(height: 4),
                     pw.Text(
                       'Transaction Receipt',
                       style: const pw.TextStyle(
-                        color: PdfColors.white,
-                        fontSize: 14,
+                        fontSize: 13,
+                        color: PdfColors.grey700,
                       ),
                     ),
                   ],
                 ),
               ),
-              pw.SizedBox(height: 24),
+              pw.SizedBox(height: 20),
 
-              // Status Badge
-              pw.Container(
-                padding: const pw.EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: pw.BoxDecoration(
-                  color: _getStatusColor(transaction.status),
-                  borderRadius: pw.BorderRadius.circular(12),
-                ),
-                child: pw.Text(
-                  _getStatusLabel(transaction.status),
-                  style: pw.TextStyle(
-                    color: PdfColors.white,
-                    fontWeight: pw.FontWeight.bold,
+              // Divider
+              pw.Divider(color: PdfColor.fromHex('#2196F3'), thickness: 1.5),
+              pw.SizedBox(height: 16),
+
+              // Status Badge centered
+              pw.Center(
+                child: pw.Container(
+                  padding: const pw.EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 8,
+                  ),
+                  decoration: pw.BoxDecoration(
+                    color: _getStatusColor(transaction.status),
+                    borderRadius: pw.BorderRadius.circular(12),
+                  ),
+                  child: pw.Text(
+                    _getStatusLabel(transaction.status),
+                    style: pw.TextStyle(
+                      color: PdfColors.white,
+                      fontWeight: pw.FontWeight.bold,
+                      fontSize: 13,
+                    ),
                   ),
                 ),
               ),
-              pw.SizedBox(height: 24),
+              pw.SizedBox(height: 8),
+
+              // Amount centered
+              pw.Center(
+                child: pw.Text(
+                  'N${NumberFormat('#,##0.00').format(transaction.amount)}',
+                  style: pw.TextStyle(
+                    fontSize: 28,
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColor.fromHex('#212121'),
+                  ),
+                ),
+              ),
+              pw.SizedBox(height: 20),
 
               // Transaction Details
               _buildSection('Transaction Information', [
@@ -124,17 +161,25 @@ class ReceiptGenerator {
                 _buildRow('Network/Provider', transaction.network),
                 _buildRow(
                   'Amount',
-                  '₦${NumberFormat('#,##0.00').format(transaction.amount)}',
+                  'N${NumberFormat('#,##0.00').format(transaction.amount)}',
                 ),
-                _buildRow('Reference', transaction.reference ?? 'N/A'),
+                if (transaction.reference != null &&
+                    transaction.reference!.isNotEmpty)
+                  _buildRow('Reference', transaction.reference!),
                 _buildRow(
                   'Date & Time',
                   DateFormat(
-                    'MMM dd, yyyy • hh:mm:ss a',
+                    'MMM dd, yyyy | hh:mm a',
                   ).format(transaction.createdAt),
                 ),
-                if (transaction.beneficiary != null)
+                if (transaction.beneficiary != null &&
+                    transaction.beneficiary!.isNotEmpty)
                   _buildRow('Beneficiary', transaction.beneficiary!),
+                if (transaction.metadata?['description'] != null)
+                  _buildRow(
+                    'Description',
+                    transaction.metadata!['description'],
+                  ),
               ]),
               pw.SizedBox(height: 16),
 
@@ -142,18 +187,23 @@ class ReceiptGenerator {
               _buildSection('Balance Information', [
                 _buildRow(
                   'Balance Before',
-                  '₦${NumberFormat('#,##0.00').format(transaction.balanceBefore)}',
+                  transaction.balanceBefore != null
+                      ? 'N${NumberFormat('#,##0.00').format(transaction.balanceBefore)}'
+                      : 'N/A',
                 ),
                 _buildRow(
                   'Balance After',
-                  '₦${NumberFormat('#,##0.00').format(transaction.balanceAfter)}',
+                  transaction.balanceAfter != null
+                      ? 'N${NumberFormat('#,##0.00').format(transaction.balanceAfter)}'
+                      : 'N/A',
                 ),
               ]),
               pw.SizedBox(height: 16),
 
               // Electricity Token
               if (transaction.type == TransactionType.electricity &&
-                  transaction.metadata?['token'] != null)
+                  transaction.metadata?['token'] != null &&
+                  transaction.metadata!['token'].toString().isNotEmpty)
                 _buildTokenSection(transaction.metadata!),
 
               // Exam Pins / Data Cards
@@ -171,7 +221,7 @@ class ReceiptGenerator {
                 child: pw.Column(
                   children: [
                     pw.Text(
-                      'Thank you for using VTU App',
+                      'Thank you for using ${AppConstants.appName}',
                       style: pw.TextStyle(
                         fontSize: 12,
                         fontWeight: pw.FontWeight.bold,
@@ -179,10 +229,26 @@ class ReceiptGenerator {
                     ),
                     pw.SizedBox(height: 4),
                     pw.Text(
-                      'Support: support@vtuapp.com | Call: +234 800 000 0000',
+                      'Email: ${AppConstants.supportEmail}',
                       style: const pw.TextStyle(
                         fontSize: 10,
                         color: PdfColors.grey700,
+                      ),
+                    ),
+                    pw.SizedBox(height: 2),
+                    pw.Text(
+                      'Phone/WhatsApp: ${AppConstants.supportPhone}',
+                      style: const pw.TextStyle(
+                        fontSize: 10,
+                        color: PdfColors.grey700,
+                      ),
+                    ),
+                    pw.SizedBox(height: 4),
+                    pw.Text(
+                      'v${AppConstants.appVersion}',
+                      style: const pw.TextStyle(
+                        fontSize: 9,
+                        color: PdfColors.grey500,
                       ),
                     ),
                   ],
@@ -228,9 +294,12 @@ class ReceiptGenerator {
             label,
             style: const pw.TextStyle(color: PdfColors.grey700, fontSize: 11),
           ),
-          pw.Text(
-            value,
-            style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+          pw.Flexible(
+            child: pw.Text(
+              value,
+              style: pw.TextStyle(fontWeight: pw.FontWeight.bold, fontSize: 11),
+              textAlign: pw.TextAlign.right,
+            ),
           ),
         ],
       ),
@@ -319,11 +388,11 @@ class ReceiptGenerator {
                   ),
                   pw.SizedBox(height: 4),
                   pw.Text(
-                    'Serial: ${pin['serial']}',
+                    'Serial: ${pin['serial'] ?? 'N/A'}',
                     style: const pw.TextStyle(fontSize: 9),
                   ),
                   pw.Text(
-                    'PIN: ${pin['pin']}',
+                    'PIN: ${pin['pin'] ?? 'N/A'}',
                     style: const pw.TextStyle(fontSize: 9),
                   ),
                 ],
@@ -336,13 +405,46 @@ class ReceiptGenerator {
   }
 
   static Future<void> _savePDF(pw.Document pdf, Transaction transaction) async {
-    final bytes = await pdf.save();
-    final directory = await getApplicationDocumentsDirectory();
-    final file = File('${directory.path}/receipt_${transaction.reference}.pdf');
-    await file.writeAsBytes(bytes);
+    try {
+      final bytes = await pdf.save();
+      final filename = 'receipt_${transaction.reference ?? transaction.id}.pdf';
 
-    // Show success message
-    debugPrint('Receipt saved to: ${file.path}');
+      if (Platform.isAndroid) {
+        // Request storage permission
+        final status = await Permission.manageExternalStorage.request();
+
+        // Try public Downloads folder
+        Directory? downloadsDir;
+
+        try {
+          downloadsDir = Directory('/storage/emulated/0/Download');
+          if (!await downloadsDir.exists()) {
+            downloadsDir = await getExternalStorageDirectory();
+          }
+        } catch (_) {
+          downloadsDir = await getApplicationDocumentsDirectory();
+        }
+
+        final file = File('${downloadsDir!.path}/$filename');
+        await file.writeAsBytes(bytes);
+
+        debugPrint('Receipt saved to: ${file.path}');
+      } else if (Platform.isIOS) {
+        // On iOS save to documents then share — iOS has no public Downloads
+        final directory = await getApplicationDocumentsDirectory();
+        final file = File('${directory.path}/$filename');
+        await file.writeAsBytes(bytes);
+        // Fall through to share on iOS
+        await Printing.sharePdf(bytes: bytes, filename: filename);
+        return;
+      }
+    } catch (e) {
+      debugPrint('Failed to save receipt: $e');
+      // Fallback to share if save fails
+      final bytes = await pdf.save();
+      final filename = 'receipt_${transaction.reference ?? transaction.id}.pdf';
+      await Printing.sharePdf(bytes: bytes, filename: filename);
+    }
   }
 
   static Future<void> _sharePDF(
@@ -350,10 +452,8 @@ class ReceiptGenerator {
     Transaction transaction,
   ) async {
     final bytes = await pdf.save();
-    await Printing.sharePdf(
-      bytes: bytes,
-      filename: 'receipt_${transaction.reference}.pdf',
-    );
+    final filename = 'receipt_${transaction.reference ?? transaction.id}.pdf';
+    await Printing.sharePdf(bytes: bytes, filename: filename);
   }
 
   static Future<void> _printPDF(pw.Document pdf) async {
@@ -374,7 +474,14 @@ class ReceiptGenerator {
   }
 
   static String _getStatusLabel(TransactionStatus status) {
-    return status.name[0].toUpperCase() + status.name.substring(1);
+    switch (status) {
+      case TransactionStatus.success:
+        return 'Successful';
+      case TransactionStatus.pending:
+        return 'Pending';
+      case TransactionStatus.failed:
+        return 'Failed';
+    }
   }
 
   static String _getTypeLabel(TransactionType type) {
@@ -398,8 +505,7 @@ class ReceiptGenerator {
       case TransactionType.referralBonus:
         return 'Referral Bonus';
       case TransactionType.referralWithdrawal:
-        // TODO: Handle this case.
-        throw UnimplementedError();
+        return 'Referral Withdrawal';
     }
   }
 }

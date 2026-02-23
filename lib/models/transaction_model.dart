@@ -48,15 +48,26 @@ class Transaction {
       amount: double.parse(json['amount']?.toString() ?? '0'),
       status: _parseStatus(json['status']),
       createdAt: _parseDate(json['time'] ?? json['created_at']),
-      beneficiary: json['beneficiary'],
+      beneficiary: json['beneficiary'] ?? json['buyer'],
       reference: json['transactionID'] ?? json['reference'],
-      balanceBefore: json['balance_before'] != null
+      balanceBefore: json['prebalance'] != null
+          ? double.parse(json['prebalance'].toString())
+          : json['balance_before'] != null
           ? double.parse(json['balance_before'].toString())
           : null,
-      balanceAfter: json['balance_after'] != null
+      balanceAfter: json['postbalance'] != null
+          ? double.parse(json['postbalance'].toString())
+          : json['balance_after'] != null
           ? double.parse(json['balance_after'].toString())
           : null,
-      metadata: json['metadata'],
+      metadata: {
+        if (json['descri'] != null) 'description': json['descri'],
+        if (json['token'] != null && json['token'] != '')
+          'token': json['token'],
+        if (json['response'] != null && json['response'] != '')
+          'response': json['response'],
+        if (json['metadata'] != null) ...json['metadata'],
+      },
     );
   }
 
