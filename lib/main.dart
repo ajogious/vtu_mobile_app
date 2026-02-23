@@ -12,6 +12,7 @@ import 'providers/theme_provider.dart';
 import 'providers/network_provider.dart';
 import 'providers/wallet_provider.dart';
 import 'providers/transaction_provider.dart';
+import 'providers/notification_provider.dart';
 import 'screens/auth/splash_screen.dart';
 import 'screens/lock/app_lock_screen.dart';
 
@@ -57,6 +58,7 @@ class MyApp extends StatelessWidget {
             return referralProvider;
           },
         ),
+        ChangeNotifierProvider(create: (_) => NotificationProvider()),
         ChangeNotifierProvider(create: (_) => AppLockProvider()),
       ],
       child: const VTUApp(),

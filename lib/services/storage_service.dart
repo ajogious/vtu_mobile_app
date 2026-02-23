@@ -216,6 +216,20 @@ class StorageService {
     return {};
   }
 
+  // ========== IN-APP NOTIFICATIONS ==========
+
+  Future<void> saveNotifications(List<dynamic> notificationsJson) async {
+    await _prefs.setString('in_app_notifications', jsonEncode(notificationsJson));
+  }
+
+  List<dynamic> getNotifications() {
+    String? data = _prefs.getString('in_app_notifications');
+    if (data != null) {
+      return jsonDecode(data);
+    }
+    return [];
+  }
+
   // ========== CLEAR DATA ==========
 
   // Logout - clear all data

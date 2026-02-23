@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
+import 'dart:async';
 import '../models/transaction_model.dart';
 import 'storage_service.dart';
 
 class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
+
+  static final StreamController<void> onNotificationAdded = StreamController<void>.broadcast();
 
   static bool _initialized = false;
 
@@ -185,6 +188,20 @@ class NotificationService {
       notificationDetails: details,
       payload: payload,
     );
+    
+    // Save to local storage for in-app display
+    final data = storage.getNotifications();
+    final newItem = {
+      'id': DateTime.now().millisecondsSinceEpoch.toString(),
+      'title': title,
+      'body': body,
+      'createdAt': DateTime.now().toIso8601String(),
+      'isRead': false,
+      'payload': payload,
+    };
+    data.insert(0, newItem);
+    await storage.saveNotifications(data);
+    onNotificationAdded.add(null);
   }
 
   // ─── Transaction Notifications ─────────────────────────────────────────────

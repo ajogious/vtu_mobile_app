@@ -7,6 +7,7 @@ import '../../providers/auth_provider.dart';
 import '../../providers/network_provider.dart';
 import '../../providers/wallet_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../providers/notification_provider.dart';
 import '../../utils/ui_helpers.dart';
 import '../atc/atc_request_screen.dart';
 import '../buy/buy_airtime_screen.dart';
@@ -26,9 +27,11 @@ import '../widgets/service_card.dart';
 import '../widgets/transaction_card.dart';
 import '../widgets/offline_banner.dart';
 import '../widgets/cached_data_badge.dart';
+import '../widgets/loading_overlay.dart';
 import '../auth/login_screen.dart';
 import '../profile/profile_screen.dart';
 import '../wallet/kyc_screen.dart';
+import '../notification/notification_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
@@ -39,6 +42,7 @@ class DashboardScreen extends StatefulWidget {
 
 class _DashboardScreenState extends State<DashboardScreen> {
   bool _balanceVisible = true;
+  bool _isRefreshing = false;
 
   @override
   void initState() {
@@ -167,16 +171,28 @@ class _DashboardScreenState extends State<DashboardScreen> {
       return;
     }
 
-    final authProvider = context.read<AuthProvider>();
+    setState(() {
+      _isRefreshing = true;
+    });
 
-    await Future.wait([
-      authProvider.refreshUser(),
-      context.read<WalletProvider>().loadBalance(forceRefresh: true),
-      context.read<TransactionProvider>().fetchTransactions(),
-    ]);
+    try {
+      final authProvider = context.read<AuthProvider>();
 
-    if (authProvider.user != null && mounted) {
-      context.read<WalletProvider>().updateFromUser(authProvider.user!);
+      await Future.wait([
+        authProvider.refreshUser(),
+        context.read<WalletProvider>().loadBalance(forceRefresh: true),
+        context.read<TransactionProvider>().fetchTransactions(),
+      ]);
+
+      if (authProvider.user != null && mounted) {
+        context.read<WalletProvider>().updateFromUser(authProvider.user!);
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isRefreshing = false;
+        });
+      }
     }
   }
 
@@ -227,8 +243,19 @@ class _DashboardScreenState extends State<DashboardScreen> {
     // Debug print (remove later)
     print('User KYC Verified: ${user?.kycVerified}');
 
-    return Scaffold(
-      appBar: AppBar(
+    return LoadingOverlay(
+      isLoading: _isRefreshing,
+      child: Scaffold(
+        appBar: AppBar(
+        leading: Padding(
+          padding: const EdgeInsets.all(8.0),
+          child: ClipOval(
+            child: Image.asset(
+              'images/logo.jpg',
+              fit: BoxFit.cover,
+            ),
+          ),
+        ),
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -240,6 +267,50 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ],
         ),
         actions: [
+          Consumer<NotificationProvider>(
+            builder: (context, notificationProvider, child) {
+              final unreadCount = notificationProvider.unreadCount;
+              return Stack(
+                alignment: Alignment.center,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.notifications),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const NotificationScreen()),
+                      );
+                    },
+                  ),
+                  if (unreadCount > 0)
+                    Positioned(
+                      right: 8,
+                      top: 8,
+                      child: Container(
+                        padding: const EdgeInsets.all(2),
+                        decoration: BoxDecoration(
+                          color: Colors.red,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        constraints: const BoxConstraints(
+                          minWidth: 16,
+                          minHeight: 16,
+                        ),
+                        child: Text(
+                          unreadCount > 99 ? '99+' : unreadCount.toString(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.person),
             onPressed: () {
@@ -299,7 +370,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           ),
         ),
       ),
-    );
+    ));
   }
 
   Widget _buildKycPrompt() {
