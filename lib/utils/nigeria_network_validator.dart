@@ -6,20 +6,18 @@ class NigeriaNetworkValidator {
   /// Map of network name → list of valid prefixes
   static const Map<String, List<String>> _networkPrefixes = {
     'MTN': [
-      '0703',
-      '0706',
-      '0803',
-      '0806',
-      '0810',
-      '0813',
-      '0814',
-      '0816',
-      '0903',
-      '0906',
-      '0913',
-      '0916',
+      '0703', '0706',
+      '0803', '0806',
+      '0810', '0813', '0814', '0816',
+      '0903', '0906',
+      '0913', '0916',
+
+      // Visafone (now MTN)
+      '0704', '07025', '07026',
     ],
-    'GLO': ['0705', '0805', '0807', '0811', '0815', '0905'],
+
+    'GLO': ['0705', '0805', '0807', '0811', '0815', '0905', '0915'],
+
     'AIRTEL': [
       '0701',
       '0708',
@@ -30,8 +28,16 @@ class NigeriaNetworkValidator {
       '0902',
       '0904',
       '0907',
+      '0912',
     ],
+
     '9MOBILE': ['0809', '0817', '0818', '0908', '0909'],
+
+    // Other Nigerian Networks
+    'NTEL': ['0804'],
+    'SMILE': ['0702'],
+    'STARCOMMS': ['07028', '07029', '0819'],
+    'MULTILINKS': ['07027', '0709'],
   };
 
   /// Returns the expected network name for a given phone number.
