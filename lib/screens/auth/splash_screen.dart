@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_constants.dart';
 import '../../providers/auth_provider.dart';
+import '../../providers/app_lock_provider.dart';
 import '../../services/storage_service.dart';
 import 'onboarding_screen.dart';
 import 'login_screen.dart';
@@ -70,13 +71,18 @@ class _SplashScreenState extends State<SplashScreen>
 
       final storage = StorageService();
       final authProvider = context.read<AuthProvider>();
-
       if (storage.isFirstLaunch()) {
         _navigateToScreen(const OnboardingScreen());
         return;
       }
 
-      if (authProvider.isAuthenticated) {
+      final isTokenValid = await authProvider.checkTokenValidity();
+
+      if (authProvider.isAuthenticated && isTokenValid) {
+        final lockProvider = context.read<AppLockProvider>();
+        if (lockProvider.autoLockDuration != AutoLockDuration.never) {
+          lockProvider.lock();
+        }
         _navigateToScreen(const DashboardScreen());
       } else {
         _navigateToScreen(const LoginScreen());

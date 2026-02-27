@@ -1,5 +1,5 @@
 class DataPlan {
-  final String id; // ← ADD THIS
+  final String id;
   final String name;
   final String type;
   final double price;
@@ -7,7 +7,7 @@ class DataPlan {
   final String network;
 
   DataPlan({
-    required this.id, // ← ADD THIS
+    required this.id,
     required this.name,
     required this.type,
     required this.price,
@@ -15,10 +15,9 @@ class DataPlan {
     required this.network,
   });
 
-  // Update fromJson
   factory DataPlan.fromJson(Map<String, dynamic> json) {
     return DataPlan(
-      id: json['id']?.toString() ?? '', // ← ADD THIS
+      id: json['id']?.toString() ?? '',
       name: json['name'] ?? '',
       type: json['type'] ?? '',
       price: (json['price'] as num?)?.toDouble() ?? 0,
@@ -27,10 +26,9 @@ class DataPlan {
     );
   }
 
-  // Update toJson
   Map<String, dynamic> toJson() {
     return {
-      'id': id, // ← ADD THIS
+      'id': id,
       'name': name,
       'type': type,
       'price': price,

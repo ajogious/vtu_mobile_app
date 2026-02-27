@@ -1,4 +1,5 @@
 import '../../config/api_result.dart';
+import '../../models/airtime_network_model.dart';
 import '../../models/atc_request_model.dart';
 import '../../models/data_plan_model.dart';
 import '../../models/exam_type_model.dart';
@@ -84,7 +85,7 @@ abstract class ApiService {
 
   Future<ApiResult<List<DataPlan>>> getDataPlans({String? network});
 
-  Future<ApiResult<List<String>>> getAirtimeNetworks();
+  Future<ApiResult<List<AirtimeNetwork>>> getAirtimeNetworks();
 
   Future<ApiResult<Map<String, dynamic>>> getCablePlans();
 

@@ -40,7 +40,13 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MultiProvider(
       providers: [
-        ChangeNotifierProvider(create: (_) => AuthProvider()),
+        ChangeNotifierProvider(create: (_) => AppLockProvider()),
+        ChangeNotifierProxyProvider<AppLockProvider, AuthProvider>(
+          create: (context) => AuthProvider(context.read<AppLockProvider>()),
+          update: (_, appLockProvider, authProvider) {
+            return authProvider ?? AuthProvider(appLockProvider);
+          },
+        ),
         ChangeNotifierProvider(create: (_) => ThemeProvider()),
         ChangeNotifierProvider(create: (_) => NetworkProvider()),
         ChangeNotifierProvider(create: (_) => WalletProvider()),
@@ -59,7 +65,6 @@ class MyApp extends StatelessWidget {
           },
         ),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
-        ChangeNotifierProvider(create: (_) => AppLockProvider()),
       ],
       child: const VTUApp(),
     );
@@ -92,11 +97,23 @@ class _VTUAppState extends State<VTUApp> with WidgetsBindingObserver {
 
     switch (state) {
       case AppLifecycleState.paused:
-      case AppLifecycleState.inactive:
+        // Only record background time on actual pause (not inactive).
+        // `inactive` fires when native dialogs (like biometric prompts) appear —
+        // treating it as background caused an immediate re-lock after the
+        // biometric prompt closed.
         lockProvider.onAppBackground();
         break;
+      case AppLifecycleState.inactive:
+        // Do nothing — inactive is fired during biometric prompts, phone calls,
+        // notification banners, etc. We intentionally don't lock here.
+        break;
       case AppLifecycleState.resumed:
-        lockProvider.onAppForeground();
+        // Only lock when a user session is active — logged-out users on the
+        // LoginScreen should never see the AppLockScreen.
+        final authProvider = context.read<AuthProvider>();
+        if (authProvider.isAuthenticated) {
+          lockProvider.onAppForeground();
+        }
         break;
       default:
         break;
@@ -113,19 +130,26 @@ class _VTUAppState extends State<VTUApp> with WidgetsBindingObserver {
           theme: ThemeConfig.lightTheme,
           darkTheme: ThemeConfig.darkTheme,
           themeMode: themeProvider.themeMode,
-          home: Consumer<AppLockProvider>(
-            builder: (context, lockProvider, child) {
-              if (lockProvider.isLocked) {
-                return AppLockScreen(
-                  onUnlocked: () {
-                    lockProvider.unlock();
-                  },
+          builder: (context, child) {
+            return Consumer<AppLockProvider>(
+              builder: (context, lockProvider, _) {
+                return Stack(
+                  children: [
+                    if (child != null) child,
+                    if (lockProvider.isLocked)
+                      Positioned.fill(
+                        child: AppLockScreen(
+                          onUnlocked: () {
+                            lockProvider.unlock();
+                          },
+                        ),
+                      ),
+                  ],
                 );
-              }
-              return child!;
-            },
-            child: const SplashScreen(),
-          ),
+              },
+            );
+          },
+          home: const SplashScreen(),
         );
       },
     );

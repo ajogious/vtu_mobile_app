@@ -22,6 +22,9 @@ class CacheService {
   static const String _cablePlansPrefix = 'cache_cable_plans_';
   static const String _cablePlansTimePrefix = 'cache_cable_plans_time_';
 
+  // How long before wallet balance cache is considered stale
+  static const Duration _walletCacheDuration = Duration(minutes: 5);
+
   static Future<void> init() async {
     _prefs ??= await SharedPreferences.getInstance();
   }
@@ -41,8 +44,17 @@ class CacheService {
     );
   }
 
+  /// Returns cached balance only if it exists AND is fresh (within 5 minutes).
+  /// Returns null if stale or missing, forcing the caller to hit the API.
   static double? getCachedWalletBalance() {
-    return _prefs?.getDouble(_walletBalance);
+    final balance = _prefs?.getDouble(_walletBalance);
+    if (balance == null) return null;
+
+    // FIX: treat stale cache as a miss so the API is called
+    final cacheTime = getWalletBalanceTime();
+    if (isCacheStale(cacheTime, threshold: _walletCacheDuration)) return null;
+
+    return balance;
   }
 
   static DateTime? getWalletBalanceTime() {
@@ -148,7 +160,7 @@ class CacheService {
     return DateTime.tryParse(timeStr);
   }
 
-  // ─── Cable Plans ──────────────────────────────────────────────────────────
+  // ─── Cable Plans ───────────────────────────────────────────────────────────
 
   static Future<void> cacheCablePlans(
     String provider,
@@ -235,23 +247,18 @@ class CacheService {
     return DateTime.now().difference(time) > threshold;
   }
 
-  /// Clear all cached data
+  /// Clear all cached data including dynamic keys (cable plans, data plans).
+  /// Uses removeWhere to catch all prefixed keys that can't be listed statically.
   static Future<void> clearAll() async {
     await _ensureInit();
-    final keys = [
-      _walletBalance,
-      _walletBalanceTime,
-      _transactions,
-      _transactionsTime,
-      _dataPlans,
-      _dataPlansTime,
-      _userProfile,
-      _userProfileTime,
-      _beneficiaries,
-      _beneficiariesTime,
-    ];
-    for (final key in keys) {
-      await _prefs!.remove(key);
+
+    // FIX: get all keys first, then remove anything that starts with 'cache_'
+    // This catches dynamic keys like cache_cable_plans_DSTV, cache_data_plans_MTN, etc.
+    final allKeys = _prefs!.getKeys();
+    for (final key in allKeys) {
+      if (key.startsWith('cache_')) {
+        await _prefs!.remove(key);
+      }
     }
   }
 }

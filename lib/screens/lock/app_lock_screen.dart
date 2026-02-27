@@ -15,9 +15,10 @@ class AppLockScreen extends StatefulWidget {
 }
 
 class _AppLockScreenState extends State<AppLockScreen> {
-  final _pinController = TextEditingController();
+  final _passwordController = TextEditingController();
   String _errorMessage = '';
   bool _isLoading = false;
+  bool _isTryingBiometric = false; // guard against concurrent biometric prompts
   bool _biometricAvailable = false;
   String _biometricLabel = 'Biometric';
   IconData _biometricIcon = Icons.fingerprint;
@@ -32,7 +33,7 @@ class _AppLockScreenState extends State<AppLockScreen> {
 
   @override
   void dispose() {
-    _pinController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
@@ -59,9 +60,12 @@ class _AppLockScreenState extends State<AppLockScreen> {
 
   Future<void> _tryBiometric() async {
     if (!_biometricAvailable) return;
+    // Prevent multiple simultaneous biometric prompts which can cause freezes
+    if (_isTryingBiometric) return;
 
     setState(() {
       _isLoading = true;
+      _isTryingBiometric = true;
     });
 
     final result = await BiometricService.authenticateForAppUnlock();
@@ -70,23 +74,26 @@ class _AppLockScreenState extends State<AppLockScreen> {
 
     setState(() {
       _isLoading = false;
+      _isTryingBiometric = false;
     });
 
     if (result == BiometricResult.success) {
       widget.onUnlocked();
     } else if (result == BiometricResult.lockedOut) {
       setState(() {
-        _errorMessage = 'Biometric locked. Please use PIN.';
+        _errorMessage = 'Biometric locked. Please use your password.';
         _biometricAvailable = false;
       });
-    } else if (result == BiometricResult.notAvailable) {
+    } else if (result == BiometricResult.notAvailable ||
+        result == BiometricResult.notEnrolled) {
       setState(() {
         _biometricAvailable = false;
       });
     }
+    // For cancelled or failed: just show the screen — user can tap the button again.
   }
 
-  void _verifyPin() async {
+  void _verifyPassword() async {
     if (_isLocked) {
       UiHelpers.showSnackBar(
         context,
@@ -96,11 +103,11 @@ class _AppLockScreenState extends State<AppLockScreen> {
       return;
     }
 
-    final pin = _pinController.text.trim();
+    final password = _passwordController.text;
 
-    if (pin.length < 5) {
+    if (password.isEmpty) {
       setState(() {
-        _errorMessage = 'Please enter your 5-digit PIN';
+        _errorMessage = 'Please enter your password';
       });
       return;
     }
@@ -115,7 +122,8 @@ class _AppLockScreenState extends State<AppLockScreen> {
     if (!mounted) return;
 
     final storage = StorageService();
-    final isValid = await storage.verifyPin(pin);
+    final savedPassword = await storage.getPassword();
+    final isValid = savedPassword != null && savedPassword == password;
 
     setState(() {
       _isLoading = false;
@@ -127,12 +135,12 @@ class _AppLockScreenState extends State<AppLockScreen> {
     } else {
       _failedAttempts++;
 
-      if (_failedAttempts >= 3) {
+      if (_failedAttempts >= 5) {
         setState(() {
           _isLocked = true;
           _errorMessage = 'Too many failed attempts. Try again in 30 seconds.';
-          _pinController.clear();
         });
+        _passwordController.clear();
 
         // Unlock after 30 seconds
         Future.delayed(const Duration(seconds: 30), () {
@@ -147,9 +155,9 @@ class _AppLockScreenState extends State<AppLockScreen> {
       } else {
         setState(() {
           _errorMessage =
-              'Incorrect PIN. ${3 - _failedAttempts} attempt${3 - _failedAttempts > 1 ? 's' : ''} remaining.';
-          _pinController.clear();
+              'Incorrect password. ${5 - _failedAttempts} attempt${5 - _failedAttempts > 1 ? 's' : ''} remaining.';
         });
+        _passwordController.clear();
       }
     }
   }
@@ -159,142 +167,150 @@ class _AppLockScreenState extends State<AppLockScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Logo/Icon
-              const Icon(Icons.lock, size: 80, color: Colors.grey),
-              const SizedBox(height: 24),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(
+              minHeight:
+                  MediaQuery.of(context).size.height -
+                  MediaQuery.of(context).padding.top -
+                  MediaQuery.of(context).padding.bottom -
+                  48, // account for the 24px padding top + bottom
+            ),
+            child: IntrinsicHeight(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  // Logo/Icon
+                  const Icon(Icons.lock, size: 80, color: Colors.grey),
+                  const SizedBox(height: 24),
 
-              // Title
-              const Text(
-                'App Locked',
-                style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Enter your PIN to continue',
-                style: TextStyle(color: Colors.grey[600], fontSize: 16),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 48),
-
-              // Biometric Button
-              if (_biometricAvailable && !_isLoading && !_isLocked) ...[
-                ElevatedButton.icon(
-                  onPressed: _tryBiometric,
-                  icon: Icon(_biometricIcon, size: 28),
-                  label: Text(
-                    'Use $_biometricLabel',
-                    style: const TextStyle(fontSize: 16),
+                  // Title
+                  const Text(
+                    'App Locked',
+                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold),
+                    textAlign: TextAlign.center,
                   ),
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Enter your account password to continue',
+                    style: TextStyle(color: Colors.grey[600], fontSize: 16),
+                    textAlign: TextAlign.center,
                   ),
-                ),
-                const SizedBox(height: 24),
-                const Row(
-                  children: [
-                    Expanded(child: Divider()),
-                    Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 16),
-                      child: Text('or'),
-                    ),
-                    Expanded(child: Divider()),
-                  ],
-                ),
-                const SizedBox(height: 24),
-              ],
+                  const SizedBox(height: 48),
 
-              // Loading
-              if (_isLoading) ...[
-                const Center(child: CircularProgressIndicator()),
-                const SizedBox(height: 24),
-              ],
-
-              // PIN Input
-              if (!_isLoading) ...[
-                TextField(
-                  controller: _pinController,
-                  obscureText: true,
-                  keyboardType: TextInputType.number,
-                  textAlign: TextAlign.center,
-                  maxLength: 5,
-                  autofocus: !_biometricAvailable,
-                  enabled: !_isLocked,
-                  inputFormatters: [
-                    FilteringTextInputFormatter.digitsOnly,
-                    LengthLimitingTextInputFormatter(5),
-                  ],
-                  decoration: InputDecoration(
-                    counterText: '',
-                    hintText: '•  •  •  •  •',
-                    hintStyle: TextStyle(
-                      color: Colors.grey[400],
-                      fontSize: 24,
-                      letterSpacing: 8,
+                  // Biometric Button
+                  if (_biometricAvailable && !_isLoading && !_isLocked) ...[
+                    ElevatedButton.icon(
+                      onPressed: _tryBiometric,
+                      icon: Icon(_biometricIcon, size: 28),
+                      label: Text(
+                        'Use $_biometricLabel',
+                        style: const TextStyle(fontSize: 16),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
                     ),
-                    errorText: _errorMessage.isNotEmpty ? _errorMessage : null,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    fillColor: _isLocked ? Colors.grey[200] : null,
-                    filled: _isLocked,
-                  ),
-                  style: const TextStyle(fontSize: 24, letterSpacing: 8),
-                  onSubmitted: (_) => _verifyPin(),
-                  onChanged: (value) {
-                    if (_errorMessage.isNotEmpty && !_isLocked) {
-                      setState(() {
-                        _errorMessage = '';
-                      });
-                    }
-                    if (value.length == 5) {
-                      _verifyPin();
-                    }
-                  },
-                ),
-                const SizedBox(height: 24),
-
-                if (!_isLocked)
-                  ElevatedButton(
-                    onPressed: _verifyPin,
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    child: const Text('Unlock', style: TextStyle(fontSize: 16)),
-                  ),
-
-                // Locked countdown
-                if (_isLocked) ...[
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: Colors.red[50],
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
+                    const SizedBox(height: 24),
+                    const Row(
                       children: [
-                        Icon(Icons.timer, color: Colors.red[700]),
-                        const SizedBox(width: 8),
-                        Text(
-                          'Account locked. Please wait 30 seconds.',
-                          style: TextStyle(
-                            color: Colors.red[900],
-                            fontSize: 13,
-                          ),
+                        Expanded(child: Divider()),
+                        Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 16),
+                          child: Text('or'),
                         ),
+                        Expanded(child: Divider()),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // Loading
+                  if (_isLoading) ...[
+                    const Center(child: CircularProgressIndicator()),
+                    const SizedBox(height: 24),
+                  ],
+
+                  // PIN Input
+                  if (!_isLoading) ...[
+                    TextField(
+                      controller: _passwordController,
+                      obscureText: true,
+                      enableInteractiveSelection: false,
+                      textAlign: TextAlign.center,
+                      autofocus: !_biometricAvailable,
+                      enabled: !_isLocked,
+                      decoration: InputDecoration(
+                        counterText: '',
+                        hintText: '••••••••',
+                        hintStyle: TextStyle(
+                          color: Colors.grey[400],
+                          fontSize: 24,
+                          letterSpacing: 8,
+                        ),
+                        errorText: _errorMessage.isNotEmpty
+                            ? _errorMessage
+                            : null,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        fillColor: _isLocked ? Colors.grey[200] : null,
+                        filled: _isLocked,
+                      ),
+                      style: const TextStyle(fontSize: 24, letterSpacing: 8),
+                      onSubmitted: (_) => _verifyPassword(),
+                      onChanged: (value) {
+                        if (_errorMessage.isNotEmpty && !_isLocked) {
+                          setState(() {
+                            _errorMessage = '';
+                          });
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 24),
+
+                    if (!_isLocked)
+                      ElevatedButton(
+                        onPressed: _verifyPassword,
+                        style: ElevatedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                        ),
+                        child: const Text(
+                          'Unlock',
+                          style: TextStyle(fontSize: 16),
+                        ),
+                      ),
+
+                    // Locked countdown
+                    if (_isLocked) ...[
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.red[50],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.timer, color: Colors.red[700]),
+                            const SizedBox(width: 8),
+                            Text(
+                              'Account locked. Please wait 30 seconds.',
+                              style: TextStyle(
+                                color: Colors.red[900],
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
                 ],
-              ],
-            ],
+              ),
+            ),
           ),
         ),
       ),

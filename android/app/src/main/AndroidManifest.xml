@@ -7,7 +7,7 @@
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
 
     <application
-        android:label="A3TECH DATA"
+        android:label="A3Tech Data"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 

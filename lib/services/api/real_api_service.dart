@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import '../../config/api_config.dart';
 import '../../config/api_result.dart';
+import '../../models/airtime_network_model.dart';
 import '../../models/data_plan_model.dart';
 import '../../models/user_model.dart';
 import '../../models/transaction_model.dart';
@@ -166,7 +167,7 @@ class RealApiService implements ApiService {
     try {
       final response = await _dio.post(
         ApiConfig.verifyOtpEndpoint,
-        data: {'email': email, 'otp': otp},
+        data: {'email': email, 'otp': int.tryParse(otp) ?? otp},
       );
 
       final responseData = response.data;
@@ -192,7 +193,11 @@ class RealApiService implements ApiService {
     try {
       final response = await _dio.post(
         ApiConfig.resetPasswordEndpoint,
-        data: {'email': email, 'otp': otp, 'new_password': newPassword},
+        data: {
+          'email': email,
+          'otp': int.tryParse(otp) ?? otp,
+          'new_password': newPassword,
+        },
       );
 
       final responseData = response.data;
@@ -501,7 +506,7 @@ class RealApiService implements ApiService {
   }
 
   @override
-  Future<ApiResult<List<String>>> getAirtimeNetworks() async {
+  Future<ApiResult<List<AirtimeNetwork>>> getAirtimeNetworks() async {
     try {
       final response = await _dio.get(ApiConfig.airtimePlansEndpoint);
 
@@ -509,7 +514,9 @@ class RealApiService implements ApiService {
 
       if (responseData['ok'] == true) {
         final items = responseData['data']['items'] as List;
-        final networks = items.map((e) => e['network'].toString()).toList();
+        final networks = items
+            .map((e) => AirtimeNetwork.fromJson(e as Map<String, dynamic>))
+            .toList();
         return ApiResult.success(networks);
       }
 
@@ -671,10 +678,22 @@ class RealApiService implements ApiService {
 
       if (responseData['ok'] == true) {
         final data = responseData['data'] ?? responseData;
+
+        // Check 3rd-party status — a non-SUCCESSFUL status means the provider
+        // processed but refunded (e.g. invalid number, low balance).
+        final status = (data['status'] ?? '').toString().toUpperCase();
+        if (status.isNotEmpty && status != 'SUCCESSFUL') {
+          final reason = data['message']?.toString();
+          return ApiResult.failure(
+            (reason != null && reason.isNotEmpty)
+                ? reason
+                : 'Transaction failed: $status',
+          );
+        }
+
         return ApiResult.success({
-          'transaction_id': data['transaction_id'] ?? data['id'],
-          'reference': data['reference'],
-          'balance': (data['balance'] as num?)?.toDouble() ?? 0,
+          'transaction_id': data['transaction_id']?.toString() ?? '',
+          'status': status,
         });
       }
 
@@ -690,7 +709,7 @@ class RealApiService implements ApiService {
   Future<ApiResult<Map<String, dynamic>>> buyData({
     required String network,
     required String dataType,
-    required String dataPlan, // This should now be the plan ID
+    required String dataPlan, // plan id as String e.g. "8"
     required String number,
     required String pincode,
   }) async {
@@ -700,7 +719,8 @@ class RealApiService implements ApiService {
         data: {
           'network': network,
           'type': dataType,
-          'dataBundle': dataPlan, // Send plan ID (e.g., "55")
+          // FIX: API requires dataBundle as int, not string
+          'dataBundle': int.tryParse(dataPlan) ?? dataPlan,
           'number': number,
           'pincode': pincode,
         },
@@ -711,10 +731,21 @@ class RealApiService implements ApiService {
       if (responseData['ok'] == true) {
         final data = responseData['data'] ?? responseData;
 
+        // Check 3rd-party status
+        final status = (data['status'] ?? '').toString().toUpperCase();
+        if (status.isNotEmpty && status != 'SUCCESSFUL') {
+          final reason = data['message']?.toString();
+          return ApiResult.failure(
+            (reason != null && reason.isNotEmpty)
+                ? reason
+                : 'Transaction failed: $status',
+          );
+        }
+
         return ApiResult.success({
-          'transaction_id': data['transaction_id'] ?? data['id'],
-          'reference': data['reference'],
-          'balance': (data['balance'] as num?)?.toDouble() ?? 0,
+          'transaction_id': data['transaction_id']?.toString() ?? '',
+          'status': status,
+          'message': data['message']?.toString() ?? '',
         });
       }
 

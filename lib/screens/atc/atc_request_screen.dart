@@ -423,9 +423,9 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                 // Network Selector
                 NetworkSelector(
                   selectedNetwork: _selectedNetwork,
-                  onNetworkSelected: (network) {
+                  onNetworkSelected: (airtimeNetwork) {
                     setState(() {
-                      _selectedNetwork = network;
+                      _selectedNetwork = airtimeNetwork.network;
                     });
                   },
                 ),

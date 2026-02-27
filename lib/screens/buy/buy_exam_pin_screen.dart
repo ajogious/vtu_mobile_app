@@ -148,14 +148,16 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
     }
 
     // Verify PIN
-    final pinVerified = await showPinVerificationDialog(
+    final serverPinSet = context.read<AuthProvider>().user?.pinSet == true;
+    final verifiedPin = await showPinVerificationDialog(
       context,
       title: 'Enter PIN',
       subtitle:
           'Authorize purchase of $_quantity ${_selectedExamType!.examType} pin${_quantity > 1 ? 's' : ''}',
+      serverPinSet: serverPinSet,
     );
 
-    if (!pinVerified) {
+    if (verifiedPin == null) {
       UiHelpers.showSnackBar(context, 'Transaction cancelled', isError: true);
       return;
     }
@@ -183,7 +185,7 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
     final result = await authService.api.buyExamPin(
       examType: _selectedExamType!.examType,
       quantity: _quantity,
-      pincode: '12345',
+      pincode: verifiedPin,
     );
 
     if (!mounted) return;
@@ -192,20 +194,22 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
 
     if (result.success && result.data != null) {
       // Update balance
-      context.read<WalletProvider>().deductBalance(_totalAmount);
+      final walletProvider = context.read<WalletProvider>();
+      final balanceBefore = walletProvider.balance;
+      walletProvider.deductBalance(_totalAmount);
 
       // Create transaction
       final transaction = Transaction(
-        id: result.data!['transaction_id'],
+        id: result.data!['transaction_id'] ?? '',
         type: TransactionType.examPin,
         network: _selectedExamType!.examType,
         amount: _totalAmount,
         status: TransactionStatus.success,
         createdAt: DateTime.now(),
         beneficiary: '$_quantity pin${_quantity > 1 ? 's' : ''}',
-        reference: result.data!['reference'],
-        balanceBefore: result.data!['balance'] + _totalAmount,
-        balanceAfter: result.data!['balance'],
+        reference: result.data!['transaction_id'] ?? '',
+        balanceBefore: balanceBefore,
+        balanceAfter: balanceBefore - _totalAmount,
         metadata: {
           'quantity': _quantity.toString(),
           'pins': result.data!['pins'],

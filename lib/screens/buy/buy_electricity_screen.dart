@@ -358,13 +358,15 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
       return;
     }
 
-    final pinVerified = await showPinVerificationDialog(
+    final serverPinSet = context.read<AuthProvider>().user?.pinSet == true;
+    final verifiedPin = await showPinVerificationDialog(
       context,
       title: 'Enter PIN',
       subtitle: 'Authorize payment of ₦${NumberFormat('#,##0').format(amount)}',
+      serverPinSet: serverPinSet,
     );
 
-    if (!pinVerified) {
+    if (verifiedPin == null) {
       UiHelpers.showSnackBar(context, 'Transaction cancelled', isError: true);
       return;
     }
@@ -394,7 +396,7 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
       disco: _selectedDisco!,
       meter: meter,
       amount: amount,
-      pincode: '12345',
+      pincode: verifiedPin,
     );
 
     if (!mounted) return;
@@ -407,19 +409,20 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
       await _saveBeneficiaryToStorage();
 
       final walletProvider = context.read<WalletProvider>();
+      final balanceBefore = walletProvider.balance;
       walletProvider.deductBalance(amount);
 
       final transaction = Transaction(
-        id: result.data!['transaction_id'],
+        id: result.data!['transaction_id'] ?? '',
         type: TransactionType.electricity,
         network: _selectedDisco!,
         amount: amount,
         status: TransactionStatus.success,
         createdAt: DateTime.now(),
         beneficiary: meter,
-        reference: result.data!['reference'],
-        balanceBefore: result.data!['balance'] + amount,
-        balanceAfter: result.data!['balance'],
+        reference: result.data!['transaction_id'] ?? '',
+        balanceBefore: balanceBefore,
+        balanceAfter: balanceBefore - amount,
         metadata: {
           'customer_name': _customerName ?? '',
           'address': _customerAddress ?? '',

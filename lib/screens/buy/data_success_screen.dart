@@ -7,11 +7,13 @@ import '../widgets/custom_button.dart';
 class DataSuccessScreen extends StatelessWidget {
   final Transaction transaction;
   final DataPlan dataPlan;
+  final String? providerMessage;
 
   const DataSuccessScreen({
     super.key,
     required this.transaction,
     required this.dataPlan,
+    this.providerMessage,
   });
 
   @override
@@ -58,7 +60,7 @@ class DataSuccessScreen extends StatelessWidget {
                       Text(
                         dataPlan.name,
                         style: TextStyle(
-                          fontSize: 28, // responsive-friendly
+                          fontSize: 28,
                           fontWeight: FontWeight.bold,
                           color: Colors.green[700],
                         ),
@@ -71,6 +73,42 @@ class DataSuccessScreen extends StatelessWidget {
                         textAlign: TextAlign.center,
                       ),
                       const SizedBox(height: 24),
+
+                      // Provider message (e.g. "Y'ello! You have gifted 500MB to...")
+                      if (providerMessage != null &&
+                          providerMessage!.isNotEmpty) ...[
+                        Container(
+                          width: double.infinity,
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color: Colors.teal[50],
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.teal.shade200),
+                          ),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Icon(
+                                Icons.info_outline,
+                                color: Colors.teal[700],
+                                size: 20,
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  providerMessage!,
+                                  style: TextStyle(
+                                    color: Colors.teal[800],
+                                    fontSize: 13,
+                                    height: 1.45,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 20),
+                      ],
 
                       // Details Card
                       Container(

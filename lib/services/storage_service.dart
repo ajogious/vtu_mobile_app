@@ -23,6 +23,9 @@ class StorageService {
   static const String _notificationPromotional = 'notification_promotional';
   static const String _biometricEnabled = 'biometric_enabled';
   static const String _autoLockDuration = 'auto_lock_duration';
+  
+  static const String _tokenExpiryKey = 'token_expiry';
+  static const String _securePasswordKey = 'secure_password';
 
   // Initialize storage
   Future<void> init() async {
@@ -56,6 +59,43 @@ class StorageService {
       await _secureStorage!.delete(key: _tokenKey);
     } else {
       await _prefs.remove(_tokenKey);
+    }
+  }
+
+  // Token Expiry management
+  Future<void> saveTokenExpiry(String expiryDateStr) async {
+    await _prefs.setString(_tokenExpiryKey, expiryDateStr);
+  }
+
+  String? getTokenExpiry() {
+    return _prefs.getString(_tokenExpiryKey);
+  }
+
+  Future<void> deleteTokenExpiry() async {
+    await _prefs.remove(_tokenExpiryKey);
+  }
+
+  // Password management (for Biometric login)
+  Future<void> savePassword(String password) async {
+    if (!kIsWeb && _secureStorage != null) {
+      await _secureStorage!.write(key: _securePasswordKey, value: password);
+    } else {
+      await _prefs.setString(_securePasswordKey, password);
+    }
+  }
+
+  Future<String?> getPassword() async {
+    if (!kIsWeb && _secureStorage != null) {
+      return await _secureStorage!.read(key: _securePasswordKey);
+    }
+    return _prefs.getString(_securePasswordKey);
+  }
+
+  Future<void> deletePassword() async {
+    if (!kIsWeb && _secureStorage != null) {
+      await _secureStorage!.delete(key: _securePasswordKey);
+    } else {
+      await _prefs.remove(_securePasswordKey);
     }
   }
 
@@ -243,6 +283,10 @@ class StorageService {
   // Clear only auth data (keep preferences)
   Future<void> clearAuth() async {
     await deleteToken();
+    await deleteTokenExpiry();
+    if (!getBiometricEnabled()) {
+      await deletePassword();
+    }
     await _prefs.remove('user');
   }
 }

@@ -21,23 +21,21 @@ class WalletProvider extends ChangeNotifier {
   bool get isFromCache => _isFromCache;
 
   WalletProvider() {
-    _loadBalance();
+    _loadCachedBalance();
   }
 
-  // Load balance from cache first, then storage on startup
-  Future<void> _loadBalance({bool forceRefresh = false}) async {
-    if (!forceRefresh) {
-      final cached = CacheService.getCachedWalletBalance();
-      if (cached != null) {
-        _balance = cached;
-        _lastUpdated = CacheService.getWalletBalanceTime();
-        _isFromCache = true;
-        notifyListeners();
-        return;
-      }
+  /// On startup: load from cache or storage only (no API call yet).
+  Future<void> _loadCachedBalance() async {
+    final cached = CacheService.getCachedWalletBalance();
+    if (cached != null) {
+      _balance = cached;
+      _lastUpdated = CacheService.getWalletBalanceTime();
+      _isFromCache = true;
+      notifyListeners();
+      return;
     }
 
-    // Fall back to storage if no cache
+    // Fall back to stored user balance
     final user = _storage.getUser();
     if (user != null) {
       _balance = user.balance;
@@ -47,14 +45,11 @@ class WalletProvider extends ChangeNotifier {
     }
   }
 
-  /// Public alias so screens can call `loadBalance(forceRefresh: true)`.
-  Future<void> loadBalance({bool forceRefresh = false}) async {
-    await _loadBalance(forceRefresh: forceRefresh);
-  }
-
-  // Fetch balance from API
-  Future<bool> fetchBalance({bool forceRefresh = false}) async {
-    // Serve from cache if not forcing refresh
+  /// Primary method called by screens.
+  /// - forceRefresh: true  → always hits the API (login, pull-to-refresh, post-transaction)
+  /// - forceRefresh: false → serves from cache if available, otherwise hits API
+  Future<bool> loadBalance({bool forceRefresh = false}) async {
+    // Serve from cache if not forcing and cache is available
     if (!forceRefresh) {
       final cached = CacheService.getCachedWalletBalance();
       if (cached != null) {
@@ -66,6 +61,7 @@ class WalletProvider extends ChangeNotifier {
       }
     }
 
+    // Hit the API
     _isLoading = true;
     _error = null;
     notifyListeners();
@@ -75,10 +71,7 @@ class WalletProvider extends ChangeNotifier {
 
       if (result.success && result.data != null) {
         setBalance(result.data!);
-
-        // Also keep storage in sync
         await _storage.updateUserBalance(_balance);
-
         _isLoading = false;
         notifyListeners();
         return true;
@@ -96,13 +89,18 @@ class WalletProvider extends ChangeNotifier {
     }
   }
 
+  /// Kept for backward compatibility — delegates to loadBalance.
+  Future<bool> fetchBalance({bool forceRefresh = false}) async {
+    return loadBalance(forceRefresh: forceRefresh);
+  }
+
   // Update balance locally and in cache
   void updateBalance(double newBalance) {
     setBalance(newBalance);
     _storage.updateUserBalance(newBalance);
   }
 
-  // Update balance from user profile
+  // Update balance from user profile object
   void updateFromUser(User user) {
     _balance = user.balance;
     _lastUpdated = DateTime.now();

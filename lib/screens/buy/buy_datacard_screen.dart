@@ -199,14 +199,16 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
       return;
     }
 
-    final pinVerified = await showPinVerificationDialog(
+    final serverPinSet = context.read<AuthProvider>().user?.pinSet == true;
+    final verifiedPin = await showPinVerificationDialog(
       context,
       title: 'Enter PIN',
       subtitle:
           'Authorize purchase of $_quantity ${_selectedPlan!.displayName} data card${_quantity > 1 ? 's' : ''}',
+      serverPinSet: serverPinSet,
     );
 
-    if (!pinVerified) {
+    if (verifiedPin == null) {
       UiHelpers.showSnackBar(context, 'Transaction cancelled', isError: true);
       return;
     }
@@ -233,7 +235,7 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
     final result = await authService.api.buyDataCard(
       cardId: _selectedPlan!.id,
       quantity: _quantity,
-      pincode: '12345',
+      pincode: verifiedPin,
     );
 
     if (!mounted) return;
@@ -241,19 +243,21 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
     setState(() => _isProcessing = false);
 
     if (result.success && result.data != null) {
-      context.read<WalletProvider>().deductBalance(_totalAmount);
+      final walletProvider = context.read<WalletProvider>();
+      final balanceBefore = walletProvider.balance;
+      walletProvider.deductBalance(_totalAmount);
 
       final transaction = Transaction(
-        id: result.data!['transaction_id'],
+        id: result.data!['transaction_id'] ?? '',
         type: TransactionType.dataCard,
         network: _selectedPlan!.network,
         amount: _totalAmount,
         status: TransactionStatus.success,
         createdAt: DateTime.now(),
         beneficiary: _nameController.text.trim(),
-        reference: result.data!['reference'],
-        balanceBefore: result.data!['balance'] + _totalAmount,
-        balanceAfter: result.data!['balance'],
+        reference: result.data!['transaction_id'] ?? '',
+        balanceBefore: balanceBefore,
+        balanceAfter: balanceBefore - _totalAmount,
         metadata: {
           'plan': _selectedPlan!.displayName,
           'network_type': _selectedPlan!.networkType,

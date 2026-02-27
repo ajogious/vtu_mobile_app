@@ -57,7 +57,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
 
   @override
   void dispose() {
-    // Clean up callback to avoid calling back into a dead widget
     context.read<NetworkProvider>().removeReconnectCallback(_onReconnected);
     super.dispose();
   }
@@ -109,10 +108,8 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   context,
                   'Transaction PIN set successfully',
                 );
-                // Refresh user data so pinSet is updated
                 await context.read<AuthProvider>().refreshUser();
               } else if (mounted) {
-                // If they didn't set PIN, show prompt again
                 _checkPinSetup();
               }
             },
@@ -135,11 +132,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
       walletProvider.updateFromUser(authProvider.user!);
     }
 
-    await walletProvider.fetchBalance();
-    await transactionProvider.fetchTransactions();
+    // Use forceRefresh: true so login always pulls fresh data
+    await Future.wait([
+      walletProvider.loadBalance(forceRefresh: true),
+      transactionProvider.fetchTransactions(),
+    ]);
 
     _checkPinSetup();
-
     await _showNoticeIfAny();
   }
 
@@ -158,7 +157,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
-  // Updated pull-to-refresh — shows cached data notice when offline
   Future<void> _refreshDashboard() async {
     final isOnline = context.read<NetworkProvider>().isOnline;
 
@@ -196,6 +194,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
     }
   }
 
+  /// Navigate to a screen and refresh wallet + transactions when returning
+  Future<void> _navigateAndRefresh(Widget screen) async {
+    await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
+    if (mounted) await _refreshDashboard();
+  }
+
   Future<void> _handleLogout() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -216,6 +220,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
 
     if (confirmed == true && mounted) {
+      // Clear wallet and transaction state before logging out
+      // so stale data doesn't flash on next login
+      context.read<WalletProvider>().updateBalance(0);
+      context.read<TransactionProvider>().clearTransactions();
+
       await context.read<AuthProvider>().logout();
       if (!mounted) return;
 
@@ -240,137 +249,143 @@ class _DashboardScreenState extends State<DashboardScreen> {
     final walletProvider = context.watch<WalletProvider>();
     final user = authProvider.user;
 
-    // Debug print (remove later)
-    print('User KYC Verified: ${user?.kycVerified}');
-
     return LoadingOverlay(
       isLoading: _isRefreshing,
       child: Scaffold(
         appBar: AppBar(
-        leading: Padding(
-          padding: const EdgeInsets.all(8.0),
-          child: ClipOval(
-            child: Image.asset(
-              'images/logo.jpg',
-              fit: BoxFit.cover,
+          leading: Padding(
+            padding: const EdgeInsets.all(8.0),
+            child: ClipOval(
+              child: Image.asset('images/logo.jpg', fit: BoxFit.cover),
             ),
           ),
-        ),
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(_getGreeting(), style: const TextStyle(fontSize: 14)),
-            Text(
-              user?.firstname ?? 'User',
-              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(_getGreeting(), style: const TextStyle(fontSize: 14)),
+              Text(
+                user?.firstname ?? 'User',
+                style: const TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            Consumer<NotificationProvider>(
+              builder: (context, notificationProvider, child) {
+                final unreadCount = notificationProvider.unreadCount;
+                return Stack(
+                  alignment: Alignment.center,
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.notifications),
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const NotificationScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                    if (unreadCount > 0)
+                      Positioned(
+                        right: 8,
+                        top: 8,
+                        child: Container(
+                          padding: const EdgeInsets.all(2),
+                          decoration: BoxDecoration(
+                            color: Colors.red,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          constraints: const BoxConstraints(
+                            minWidth: 16,
+                            minHeight: 16,
+                          ),
+                          child: Text(
+                            unreadCount > 99 ? '99+' : unreadCount.toString(),
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.person),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const ProfileScreen()),
+                );
+              },
+            ),
+            IconButton(
+              icon: const Icon(Icons.logout),
+              onPressed: _handleLogout,
             ),
           ],
         ),
-        actions: [
-          Consumer<NotificationProvider>(
-            builder: (context, notificationProvider, child) {
-              final unreadCount = notificationProvider.unreadCount;
-              return Stack(
-                alignment: Alignment.center,
-                children: [
-                  IconButton(
-                    icon: const Icon(Icons.notifications),
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (_) => const NotificationScreen()),
-                      );
-                    },
-                  ),
-                  if (unreadCount > 0)
-                    Positioned(
-                      right: 8,
-                      top: 8,
-                      child: Container(
-                        padding: const EdgeInsets.all(2),
-                        decoration: BoxDecoration(
-                          color: Colors.red,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        constraints: const BoxConstraints(
-                          minWidth: 16,
-                          minHeight: 16,
-                        ),
-                        child: Text(
-                          unreadCount > 99 ? '99+' : unreadCount.toString(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.bold,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                      ),
-                    ),
-                ],
-              );
-            },
-          ),
-          IconButton(
-            icon: const Icon(Icons.person),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const ProfileScreen()),
-              );
-            },
-          ),
-          IconButton(icon: const Icon(Icons.logout), onPressed: _handleLogout),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: _refreshDashboard,
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          child: Column(
-            children: [
-              // Offline banner (shows red offline / green reconnected)
-              const OfflineBanner(),
+        body: RefreshIndicator(
+          onRefresh: _refreshDashboard,
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(),
+            child: Column(
+              children: [
+                // Offline banner
+                const OfflineBanner(),
 
-              // Wallet Balance Card
-              _buildWalletCard(
-                walletProvider.balance,
-                walletProvider.isLoading,
-                walletProvider.isFromCache ? walletProvider.lastUpdated : null,
-              ),
-
-              // KYC Prompt Banner
-              if (user != null && user.kycVerified == false) _buildKycPrompt(),
-
-              // Services Grid + Referral
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Services',
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildServicesGrid(),
-                    const SizedBox(height: 16),
-                    _buildAirtimeToCashCard(),
-                    const SizedBox(height: 12),
-                    _buildReferralCard(),
-                  ],
+                // Wallet Balance Card
+                _buildWalletCard(
+                  walletProvider.balance,
+                  walletProvider.isLoading,
+                  walletProvider.isFromCache
+                      ? walletProvider.lastUpdated
+                      : null,
                 ),
-              ),
 
-              // Recent Transactions
-              _buildRecentTransactions(),
-            ],
+                // KYC Prompt Banner
+                if (user != null && user.kycVerified == false)
+                  _buildKycPrompt(),
+
+                // Services Grid + Referral
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Services',
+                        style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      _buildServicesGrid(),
+                      const SizedBox(height: 16),
+                      _buildAirtimeToCashCard(),
+                      const SizedBox(height: 12),
+                      _buildReferralCard(),
+                    ],
+                  ),
+                ),
+
+                // Recent Transactions
+                _buildRecentTransactions(),
+              ],
+            ),
           ),
         ),
       ),
-    ));
+    );
   }
 
   Widget _buildKycPrompt() {
@@ -379,21 +394,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       child: Card(
         color: Colors.blue[50],
         child: InkWell(
-          onTap: () async {
-            final result = await Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const KycScreen()),
-            );
-
-            if (result == true && mounted) {
-              final authProvider = context.read<AuthProvider>();
-              final apiResult = await authProvider.authService.api.getMe();
-              if (apiResult.success && apiResult.data != null) {
-                await authProvider.updateUser(apiResult.data!);
-              }
-              _refreshDashboard();
-            }
-          },
+          onTap: () => _navigateAndRefresh(const KycScreen()),
           borderRadius: BorderRadius.circular(12),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -514,7 +515,6 @@ class _DashboardScreenState extends State<DashboardScreen> {
                 ),
             ],
           ),
-          // Show cached badge when balance is from cache
           if (cachedAt != null)
             Padding(
               padding: const EdgeInsets.only(top: 8),
@@ -525,14 +525,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
             children: [
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const FundWalletScreen(),
-                      ),
-                    );
-                  },
+                  // Refresh after funding wallet
+                  onPressed: () =>
+                      _navigateAndRefresh(const FundWalletScreen()),
                   icon: const Icon(Icons.add, size: 18),
                   label: const Text('Fund Wallet'),
                   style: ElevatedButton.styleFrom(
@@ -582,72 +577,42 @@ class _DashboardScreenState extends State<DashboardScreen> {
           title: 'Airtime',
           subtitle: 'Buy airtime',
           color: Colors.blue,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const BuyAirtimeScreen()),
-            );
-          },
+          onTap: () => _navigateAndRefresh(const BuyAirtimeScreen()),
         ),
         ServiceCard(
           icon: Icons.wifi,
           title: 'Data',
           subtitle: 'Buy data bundles',
           color: Colors.green,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const BuyDataScreen()),
-            );
-          },
+          onTap: () => _navigateAndRefresh(const BuyDataScreen()),
         ),
         ServiceCard(
           icon: Icons.tv,
           title: 'Cable TV',
           subtitle: 'Pay cable bills',
           color: Colors.purple,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const BuyCableScreen()),
-            );
-          },
+          onTap: () => _navigateAndRefresh(const BuyCableScreen()),
         ),
         ServiceCard(
           icon: Icons.bolt,
           title: 'Electricity',
           subtitle: 'Pay electric bills',
           color: Colors.orange,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const BuyElectricityScreen()),
-            );
-          },
+          onTap: () => _navigateAndRefresh(const BuyElectricityScreen()),
         ),
         ServiceCard(
           icon: Icons.school,
           title: 'Exam Pins',
           subtitle: 'Buy exam pins',
           color: Colors.red,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const BuyExamPinScreen()),
-            );
-          },
+          onTap: () => _navigateAndRefresh(const BuyExamPinScreen()),
         ),
         ServiceCard(
           icon: Icons.card_giftcard,
           title: 'Data Cards',
           subtitle: 'Buy data cards',
           color: Colors.teal,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const BuyDatacardScreen()),
-            );
-          },
+          onTap: () => _navigateAndRefresh(const BuyDatacardScreen()),
         ),
       ],
     );
@@ -658,12 +623,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const AtcRequestScreen()),
-          );
-        },
+        onTap: () => _navigateAndRefresh(const AtcRequestScreen()),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
@@ -714,12 +674,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
       elevation: 2,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: InkWell(
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const ReferralScreen()),
-          );
-        },
+        onTap: () => _navigateAndRefresh(const ReferralScreen()),
         borderRadius: BorderRadius.circular(12),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),

@@ -12,6 +12,7 @@ import '../beneficiaries/beneficiary_management_screen.dart';
 import 'change_password_screen.dart';
 import 'change_pin_screen.dart';
 import '../auth/login_screen.dart';
+import '../widgets/custom_textfield.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -50,12 +51,102 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _toggleBiometric(bool value) async {
     final storage = StorageService();
+
+    if (value) {
+      // Trying to enable
+      final hasPassword = (await storage.getPassword()) != null;
+      if (!hasPassword) {
+        // We need them to enter their password to cache it
+        final success = await _promptForPasswordToEnableBiometrics();
+        if (!success) return;
+      }
+    } else {
+      // Trying to disable
+      await storage.deletePassword();
+    }
+
     await storage.saveBiometricEnabled(value);
     setState(() => _biometricEnabled = value);
     UiHelpers.showSnackBar(
       context,
       value ? 'Biometric enabled' : 'Biometric disabled',
     );
+  }
+
+  Future<bool> _promptForPasswordToEnableBiometrics() async {
+    final controller = TextEditingController();
+    bool isLoading = false;
+
+    final result = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          return AlertDialog(
+            title: const Text('Verify Password'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Please enter your account password to enable biometric login.',
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 16),
+                CustomTextField(
+                  controller: controller,
+                  hintText: 'Password',
+                  obscureText: true,
+                  prefixIcon: Icons.lock,
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: isLoading ? null : () => Navigator.pop(context, false),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton(
+                onPressed: isLoading
+                    ? null
+                    : () async {
+                        final authProvider = context.read<AuthProvider>();
+                        final username = authProvider.user?.username ?? StorageService().getLastUsername() ?? '';
+                        if (controller.text.isEmpty) {
+                          UiHelpers.showSnackBar(context, 'Password is required', isError: true);
+                          return;
+                        }
+
+                        setDialogState(() => isLoading = true);
+                        
+                        // We use the raw authService to just check credentials without changing state
+                        final loginResult = await authProvider.authService.login(username, controller.text);
+                        
+                        setDialogState(() => isLoading = false);
+
+                        if (loginResult.success) {
+                          await StorageService().savePassword(controller.text);
+                          if (mounted) Navigator.pop(context, true);
+                        } else {
+                          if (mounted) {
+                            UiHelpers.showSnackBar(context, 'Incorrect password', isError: true);
+                          }
+                        }
+                      },
+                child: isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Text('Verify'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+
+    return result == true;
   }
 
   Future<void> _toggleNotification(String type, bool value) async {

@@ -1,9 +1,12 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../../models/airtime_network_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/wallet_provider.dart';
 import '../../providers/network_provider.dart';
@@ -37,10 +40,11 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
   final _amountController = TextEditingController();
 
   String? _selectedNetwork;
+  AirtimeNetwork? _selectedAirtimeNetwork;
   bool _saveBeneficiary = false;
   bool _isProcessing = false;
   bool _loadingNetworks = true;
-  List<String> _airtimeNetworks = [];
+  List<AirtimeNetwork> _airtimeNetworks = [];
 
   List<Map<String, String>> _beneficiaries = [];
   List<Transaction> _recentTransactions = [];
@@ -68,15 +72,20 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
 
     if (!mounted) return;
 
-    if (result.success && result.data != null) {
+    if (result.success && result.data != null && result.data!.isNotEmpty) {
       setState(() {
         _airtimeNetworks = result.data!;
         _loadingNetworks = false;
       });
     } else {
-      // Fallback to default networks if API fails
+      // Fallback to basic network list if API fails
       setState(() {
-        _airtimeNetworks = ['MTN', 'GLO', 'AIRTEL', '9MOBILE'];
+        _airtimeNetworks = [
+          const AirtimeNetwork(network: 'MTN', serviceKey: 'MTN_VTU'),
+          const AirtimeNetwork(network: 'GLO', serviceKey: 'GLO_VTU'),
+          const AirtimeNetwork(network: 'AIRTEL', serviceKey: 'AIRTEL_VTU'),
+          const AirtimeNetwork(network: '9MOBILE', serviceKey: '9MOBILE_VTU'),
+        ];
         _loadingNetworks = false;
       });
     }
@@ -96,9 +105,10 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
   }
 
   void _loadRecentTransactions() {
+    // FIX: use allTransactions (unfiltered) so recent purchases always show
     final transactions = context
         .read<TransactionProvider>()
-        .transactions
+        .allTransactions
         .where((t) => t.type == TransactionType.airtime)
         .take(5)
         .toList();
@@ -178,7 +188,6 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
       }
 
       final contact = await FlutterContacts.openExternalPick();
-
       if (contact == null) return;
 
       final fullContact = await FlutterContacts.getContact(
@@ -208,7 +217,6 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
       }
 
       String phone = fullContact.phones.first.number;
-
       phone = phone.replaceAll(RegExp(r'[\s\-\(\)\.]'), '');
 
       if (phone.startsWith('+234')) {
@@ -229,18 +237,12 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
         setState(() {
           _phoneController.text = phone;
         });
-
-        UiHelpers.showSnackBar(
-          context,
-          'Contact added successfully',
-          isError: false,
-        );
+        UiHelpers.showSnackBar(context, 'Contact added successfully');
       }
     } on Exception catch (e) {
       if (!mounted) return;
 
       String errorMessage = 'Failed to pick contact';
-
       if (e.toString().contains('PlatformException')) {
         errorMessage = 'Error accessing contacts. Please try again.';
       } else if (e.toString().contains('MissingPluginException')) {
@@ -264,9 +266,13 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
   }
 
   void _selectBeneficiary(Map<String, String> beneficiary) {
+    final networkName = beneficiary['network'] ?? '';
     setState(() {
       _phoneController.text = beneficiary['phone'] ?? '';
-      _selectedNetwork = beneficiary['network'];
+      _selectedNetwork = networkName;
+      _selectedAirtimeNetwork = _airtimeNetworks
+          .where((n) => n.network == networkName)
+          .firstOrNull;
     });
   }
 
@@ -274,6 +280,9 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
     setState(() {
       _phoneController.text = transaction.beneficiary ?? '';
       _selectedNetwork = transaction.network;
+      _selectedAirtimeNetwork = _airtimeNetworks
+          .where((n) => n.network == transaction.network)
+          .firstOrNull;
       _amountController.text = NumberFormat('#,###').format(transaction.amount);
     });
   }
@@ -295,13 +304,18 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
     }
 
     final phone = _phoneController.text.trim();
-    final amount = double.parse(
+    final airtimeAmount = double.parse(
       _amountController.text.replaceAll(',', '').trim(),
     );
 
+    // How much is deducted from wallet (airtime value minus discount)
+    final discountRate = _selectedAirtimeNetwork?.ratePercent ?? 0;
+    final discountAmount = airtimeAmount * discountRate;
+    final costToUser = airtimeAmount - discountAmount;
+
     final balance = context.read<WalletProvider>().balance;
-    if (balance < amount) {
-      ErrorHandler.handleInsufficientBalance(context, balance, amount);
+    if (balance < costToUser) {
+      ErrorHandler.handleInsufficientBalance(context, balance, costToUser);
       return;
     }
 
@@ -317,8 +331,20 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
             _buildConfirmRow('Phone Number', phone),
             const Divider(height: 24),
             _buildConfirmRow(
-              'Amount',
-              '₦${NumberFormat('#,##0.00').format(amount)}',
+              'Airtime Value',
+              '₦${NumberFormat('#,##0.00').format(airtimeAmount)}',
+            ),
+            if (discountRate > 0) ...[
+              _buildConfirmRow(
+                'Discount (${(discountRate * 100).toStringAsFixed(0)}%)',
+                '- ₦${NumberFormat('#,##0.00').format(discountAmount)}',
+                isDiscount: true,
+              ),
+            ],
+            const Divider(height: 16),
+            _buildConfirmRow(
+              'You Pay',
+              '₦${NumberFormat('#,##0.00').format(costToUser)}',
               isBold: true,
             ),
           ],
@@ -341,19 +367,30 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
     }
   }
 
-  Widget _buildConfirmRow(String label, String value, {bool isBold = false}) {
+  Widget _buildConfirmRow(
+    String label,
+    String value, {
+    bool isBold = false,
+    bool isDiscount = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: const TextStyle(color: Colors.grey)),
+          Text(
+            label,
+            style: TextStyle(
+              color: isDiscount ? Colors.green[700] : Colors.grey,
+            ),
+          ),
           Expanded(
             child: Text(
               value,
               style: TextStyle(
                 fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
                 fontSize: isBold ? 16 : 14,
+                color: isDiscount ? Colors.green[700] : null,
               ),
               textAlign: TextAlign.right,
             ),
@@ -365,23 +402,28 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
 
   Future<void> _buyAirtime() async {
     final phone = _phoneController.text.trim();
-    final amount = double.parse(
+    final airtimeAmount = double.parse(
       _amountController.text.replaceAll(',', '').trim(),
     );
 
-    final pinVerified = await showPinVerificationDialog(
+    final discountRate = _selectedAirtimeNetwork?.ratePercent ?? 0;
+    final costToUser = airtimeAmount * (1 - discountRate);
+
+    final serverPinSet = context.read<AuthProvider>().user?.pinSet == true;
+    final verifiedPin = await showPinVerificationDialog(
       context,
       title: 'Enter PIN',
       subtitle:
-          'Authorize purchase of ₦${NumberFormat('#,##0').format(amount)} $_selectedNetwork airtime',
+          'Pay ₦${NumberFormat('#,##0').format(costToUser)} for ₦${NumberFormat('#,##0').format(airtimeAmount)} $_selectedNetwork airtime',
+      serverPinSet: serverPinSet,
     );
 
-    if (!pinVerified) {
+    if (verifiedPin == null) {
       UiHelpers.showSnackBar(context, 'Transaction cancelled', isError: true);
       return;
     }
 
-    if (amount >= 10000) {
+    if (costToUser >= 10000) {
       final reAuthenticated = await requireReAuthentication(
         context,
         action: 'authorize this large transaction',
@@ -397,41 +439,48 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
       }
     }
 
-    setState(() {
-      _isProcessing = true;
-    });
+    setState(() => _isProcessing = true);
 
     final authService = context.read<AuthProvider>().authService;
+
     final result = await authService.api.buyAirtime(
+      // FIX: send plain network name (e.g. "MTN"), not serviceKey ("MTN_VTU")
       network: _selectedNetwork!,
       number: phone,
-      amount: amount,
-      pincode: '12345',
+      amount: airtimeAmount,
+      pincode: verifiedPin,
     );
 
     if (!mounted) return;
-
-    setState(() {
-      _isProcessing = false;
-    });
+    setState(() => _isProcessing = false);
 
     if (result.success && result.data != null) {
       await _saveBeneficiaryToStorage();
 
       final walletProvider = context.read<WalletProvider>();
-      walletProvider.deductBalance(amount);
+      final balanceBefore = walletProvider.balance;
+
+      // Deduct only what the user actually paid (discounted cost)
+      walletProvider.deductBalance(costToUser);
 
       final transaction = Transaction(
-        id: result.data!['transaction_id'],
+        id: result.data!['transaction_id'] ?? '',
         type: TransactionType.airtime,
         network: _selectedNetwork!,
-        amount: amount,
+        // amount = airtime value received (shown on success screen)
+        amount: airtimeAmount,
         status: TransactionStatus.success,
         createdAt: DateTime.now(),
         beneficiary: phone,
-        reference: result.data!['reference'],
-        balanceBefore: result.data!['balance'] + amount,
-        balanceAfter: result.data!['balance'],
+        reference: result.data!['transaction_id'] ?? '',
+        balanceBefore: balanceBefore,
+        balanceAfter: balanceBefore - costToUser,
+        metadata: discountRate > 0
+            ? {
+                'discount_rate': discountRate.toString(),
+                'cost_to_user': costToUser.toString(),
+              }
+            : null,
       );
 
       context.read<TransactionProvider>().addTransaction(transaction);
@@ -442,6 +491,8 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
       if (newBalance < 500) {
         await NotificationService.lowBalance(newBalance);
       }
+
+      if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
@@ -472,7 +523,7 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Network offline warning
+                  // Offline banner
                   OfflineBanner(isOffline: !networkProvider.isOnline),
 
                   // Network Selector
@@ -486,9 +537,10 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
                       : NetworkSelector(
                           selectedNetwork: _selectedNetwork,
                           networks: _airtimeNetworks,
-                          onNetworkSelected: (network) {
+                          onNetworkSelected: (airtimeNetwork) {
                             setState(() {
-                              _selectedNetwork = network;
+                              _selectedNetwork = airtimeNetwork.network;
+                              _selectedAirtimeNetwork = airtimeNetwork;
                             });
                           },
                         ),
@@ -513,18 +565,15 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Container(
-                        margin: const EdgeInsets.only(top: 0),
-                        child: IconButton(
-                          onPressed: _pickContact,
-                          icon: const Icon(Icons.contacts),
-                          tooltip: 'Pick from contacts',
-                          style: IconButton.styleFrom(
-                            backgroundColor: Theme.of(
-                              context,
-                            ).primaryColor.withOpacity(0.1),
-                            padding: const EdgeInsets.all(16),
-                          ),
+                      IconButton(
+                        onPressed: _pickContact,
+                        icon: const Icon(Icons.contacts),
+                        tooltip: 'Pick from contacts',
+                        style: IconButton.styleFrom(
+                          backgroundColor: Theme.of(
+                            context,
+                          ).primaryColor.withOpacity(0.1),
+                          padding: const EdgeInsets.all(16),
                         ),
                       ),
                     ],
@@ -628,8 +677,7 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
                         scrollDirection: Axis.horizontal,
                         itemCount: _beneficiaries.length,
                         itemBuilder: (context, index) {
-                          final beneficiary = _beneficiaries[index];
-                          return _buildBeneficiaryCard(beneficiary);
+                          return _buildBeneficiaryCard(_beneficiaries[index]);
                         },
                       ),
                     ),
@@ -645,9 +693,9 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    ..._recentTransactions.map((transaction) {
-                      return _buildRecentTransactionCard(transaction);
-                    }),
+                    ..._recentTransactions.map(
+                      (transaction) => _buildRecentTransactionCard(transaction),
+                    ),
                     const SizedBox(height: 16),
                   ],
                 ],

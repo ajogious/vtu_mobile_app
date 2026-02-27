@@ -86,7 +86,9 @@ class _PinVerificationDialogState extends State<PinVerificationDialog> {
 
     switch (result) {
       case BiometricResult.success:
-        Navigator.pop(context, true);
+        // Retrieve the saved PIN to forward to the API
+        final storedPin = await StorageService().getPin() ?? '';
+        if (mounted) Navigator.pop(context, storedPin);
         break;
       case BiometricResult.cancelled:
         // User cancelled, let them use PIN
@@ -129,20 +131,31 @@ class _PinVerificationDialogState extends State<PinVerificationDialog> {
     if (!mounted) return;
 
     final storage = StorageService();
-    final isValid = await storage.verifyPin(pin);
+    final hasLocalPin = await storage.hasPin();
 
-    setState(() {
-      _isLoading = false;
-    });
-
-    if (isValid) {
-      Navigator.pop(context, true);
-    } else {
+    if (hasLocalPin) {
+      // Fast local check — compare against stored PIN
+      final isValid = await storage.verifyPin(pin);
       setState(() {
-        _errorMessage = 'Incorrect PIN. Please try again.';
-        _pinController.clear();
+        _isLoading = false;
       });
-      _focusNode.requestFocus();
+      if (isValid) {
+        Navigator.pop(context, pin);
+      } else {
+        setState(() {
+          _errorMessage = 'Incorrect PIN. Please try again.';
+          _pinController.clear();
+        });
+        _focusNode.requestFocus();
+      }
+    } else {
+      // No local PIN — user set PIN on server but not cached locally.
+      // Return the entered PIN and let the API validate it.
+      // If wrong, the buy API will return an error which the screen handles.
+      setState(() {
+        _isLoading = false;
+      });
+      Navigator.pop(context, pin);
     }
   }
 
@@ -278,7 +291,7 @@ class _PinVerificationDialogState extends State<PinVerificationDialog> {
         ),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context, false),
+            onPressed: () => Navigator.pop(context, null),
             child: const Text('Cancel'),
           ),
           if (!_isLoading)
@@ -289,26 +302,34 @@ class _PinVerificationDialogState extends State<PinVerificationDialog> {
   }
 }
 
-/// Helper function to show PIN verification dialog
-Future<bool> showPinVerificationDialog(
+/// Helper function to show PIN verification dialog.
+/// Returns the verified PIN string on success, or null on cancel/failure.
+///
+/// [serverPinSet] — pass `true` when the server has confirmed the user's PIN
+/// is set (e.g. `user.pinSet == 'YES'`). This bypasses the local-storage
+/// gate so users who set their PIN on another device (or after a fresh install)
+/// are not blocked.
+Future<String?> showPinVerificationDialog(
   BuildContext context, {
   String? title,
   String? subtitle,
   bool allowBiometric = true,
+  bool serverPinSet = false,
 }) async {
   final storage = StorageService();
+  final localPinExists = await storage.hasPin();
 
-  // Check if PIN has been set
-  if (!await storage.hasPin()) {
+  // Block only when we have no local PIN AND the server also says no PIN
+  if (!localPinExists && !serverPinSet) {
     UiHelpers.showSnackBar(
       context,
       'Please set a PIN first in Settings',
       isError: true,
     );
-    return false;
+    return null;
   }
 
-  final result = await showDialog<bool>(
+  final result = await showDialog<String?>(
     context: context,
     barrierDismissible: false,
     builder: (context) => PinVerificationDialog(
@@ -318,18 +339,19 @@ Future<bool> showPinVerificationDialog(
     ),
   );
 
-  return result ?? false;
+  return (result != null && result.isNotEmpty) ? result : null;
 }
 
-/// Helper for sensitive actions (re-authentication)
+/// Helper for sensitive actions (re-authentication — returns bool not PIN)
 Future<bool> requireReAuthentication(
   BuildContext context, {
   required String action,
 }) async {
-  return showPinVerificationDialog(
+  final pin = await showPinVerificationDialog(
     context,
     title: 'Security Check',
     subtitle: 'Re-enter your PIN to $action',
     allowBiometric: true,
   );
+  return pin != null;
 }

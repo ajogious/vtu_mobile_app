@@ -394,13 +394,15 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
       return;
     }
 
-    final pinVerified = await showPinVerificationDialog(
+    final serverPinSet = context.read<AuthProvider>().user?.pinSet == true;
+    final verifiedPin = await showPinVerificationDialog(
       context,
       title: 'Enter PIN',
       subtitle: 'Authorize purchase of ${_selectedPlan!.name}',
+      serverPinSet: serverPinSet,
     );
 
-    if (!pinVerified) {
+    if (verifiedPin == null) {
       UiHelpers.showSnackBar(context, 'Transaction cancelled', isError: true);
       return;
     }
@@ -430,7 +432,7 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
       provider: _selectedProvider!,
       planId: _selectedPlan!.id,
       smartcard: smartcard,
-      pincode: '12345',
+      pincode: verifiedPin,
     );
 
     if (!mounted) return;
@@ -443,19 +445,20 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
       await _saveBeneficiaryToStorage();
 
       final walletProvider = context.read<WalletProvider>();
+      final balanceBefore = walletProvider.balance;
       walletProvider.deductBalance(amount);
 
       final transaction = Transaction(
-        id: result.data!['transaction_id'],
+        id: result.data!['transaction_id'] ?? '',
         type: TransactionType.cable,
         network: _selectedProvider!,
         amount: amount,
         status: TransactionStatus.success,
         createdAt: DateTime.now(),
         beneficiary: smartcard,
-        reference: result.data!['reference'],
-        balanceBefore: result.data!['balance'] + amount,
-        balanceAfter: result.data!['balance'],
+        reference: result.data!['transaction_id'] ?? '',
+        balanceBefore: balanceBefore,
+        balanceAfter: balanceBefore - amount,
         metadata: {
           'customer_name': _customerName ?? '',
           'package': _selectedPlan!.name,

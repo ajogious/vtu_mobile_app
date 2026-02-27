@@ -68,6 +68,9 @@ dev_dependencies:
   build_runner: ^2.4.13
   flutter_launcher_icons: ^0.13.1
 
+  # Splash screen generator
+  flutter_native_splash: ^2.4.3
+
 flutter_launcher_icons:
   android: true
   ios: true
@@ -76,6 +79,16 @@ flutter_launcher_icons:
   adaptive_icon_background: "#ffffff"
   adaptive_icon_foreground: "images/logo.jpg"
   adaptive_icon_round: "images/logo.jpg"
+
+flutter_native_splash:
+  color: "#665ED5"
+  image: images/logo.jpg
+  android_12:
+    image: images/logo.jpg
+    icon_background_color: "#665ED5"
+    color: "#665ED5"
+  ios: true
+  fullscreen: false
 
 flutter:
   uses-material-design: true

@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
+import '../services/biometric_service.dart';
+import '../services/cache_service.dart';
+import 'app_lock_provider.dart';
 
 class AuthProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
   final StorageService _storage = StorageService();
+  final AppLockProvider _appLockProvider;
 
   User? _user;
   bool _isLoading = false;
@@ -16,7 +20,7 @@ class AuthProvider extends ChangeNotifier {
   String? get error => _error;
   bool get isAuthenticated => _user != null;
 
-  AuthProvider() {
+  AuthProvider(this._appLockProvider) {
     _loadUser();
   }
 
@@ -36,6 +40,72 @@ class AuthProvider extends ChangeNotifier {
 
       if (result.success && result.data != null) {
         _user = result.data;
+        // Always keep the cached password fresh so biometrics always has valid
+        // credentials — whether biometrics is currently enabled or not.
+        await _storage.savePassword(password);
+
+        // Reset lock timer on fresh login
+        _appLockProvider.unlock();
+
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      } else {
+        _error = result.error ?? 'Login failed';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+    } catch (e) {
+      _error = e.toString();
+      _isLoading = false;
+      notifyListeners();
+      return false;
+    }
+  }
+
+  // Login with Biometrics
+  Future<bool> loginWithBiometrics() async {
+    _isLoading = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      // 1. Authenticate with biometrics natively
+      final authResult = await BiometricService.authenticateForAppUnlock();
+
+      if (authResult != BiometricResult.success) {
+        if (authResult != BiometricResult.cancelled) {
+          _error = 'Biometric authentication failed';
+        }
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      // 2. Retrieve credentials
+      final password = await _storage.getPassword();
+      final username = _storage.getLastUsername();
+
+      if (password == null ||
+          password.isEmpty ||
+          username == null ||
+          username.isEmpty) {
+        _error = 'No saved credentials found. Please login manually first.';
+        _isLoading = false;
+        notifyListeners();
+        return false;
+      }
+
+      // 3. Login normally under the hood
+      final result = await _authService.login(username, password);
+
+      if (result.success && result.data != null) {
+        _user = result.data;
+
+        // Reset lock timer on fresh login
+        _appLockProvider.unlock();
+
         _isLoading = false;
         notifyListeners();
         return true;
@@ -96,12 +166,17 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
-  // Logout
+  /// Logout — clears user session, all caches, and notifies listeners.
+  /// Call clearProviders() from the UI to also reset wallet/transaction state.
   Future<void> logout() async {
     _isLoading = true;
     notifyListeners();
 
     await _authService.logout();
+
+    // Clear all cached data so next user starts fresh
+    CacheService.clearAll();
+
     _user = null;
     _error = null;
     _isLoading = false;
@@ -129,6 +204,16 @@ class AuthProvider extends ChangeNotifier {
     _user = user;
     await _storage.saveUser(user);
     notifyListeners();
+  }
+
+  // Check token validity explicitly
+  Future<bool> checkTokenValidity() async {
+    final isValid = await _authService.isLoggedIn();
+    if (!isValid && _user != null) {
+      _user = null;
+      notifyListeners();
+    }
+    return isValid;
   }
 
   // Clear error

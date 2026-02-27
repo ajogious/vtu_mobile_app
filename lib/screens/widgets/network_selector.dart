@@ -1,15 +1,18 @@
 import 'package:flutter/material.dart';
+import '../../models/airtime_network_model.dart';
 
 class NetworkSelector extends StatelessWidget {
   final String? selectedNetwork;
-  final Function(String) onNetworkSelected;
-  final List<String> networks;
+  final Function(AirtimeNetwork) onNetworkSelected;
+  final List<AirtimeNetwork> networks;
+  final bool showDiscount;
 
   const NetworkSelector({
     super.key,
     this.selectedNetwork,
     required this.onNetworkSelected,
-    this.networks = const ['MTN', 'GLO', 'AIRTEL', '9MOBILE'],
+    this.networks = const [],
+    this.showDiscount = true,
   });
 
   Color _getNetworkColor(String network) {
@@ -40,16 +43,16 @@ class NetworkSelector extends StatelessWidget {
         ),
         const SizedBox(height: 12),
         Row(
-          children: networks.map((network) {
-            final isSelected = selectedNetwork == network;
-            final color = _getNetworkColor(network);
+          children: networks.map((airtimeNetwork) {
+            final isSelected = selectedNetwork == airtimeNetwork.network;
+            final color = _getNetworkColor(airtimeNetwork.network);
 
             return Expanded(
               child: GestureDetector(
-                onTap: () => onNetworkSelected(network),
+                onTap: () => onNetworkSelected(airtimeNetwork),
                 child: Container(
                   margin: const EdgeInsets.symmetric(horizontal: 4),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
                     color: isSelected
                         ? color.withOpacity(0.1)
@@ -71,7 +74,7 @@ class NetworkSelector extends StatelessWidget {
                         ),
                         child: Center(
                           child: Text(
-                            network[0],
+                            airtimeNetwork.network[0],
                             style: const TextStyle(
                               color: Colors.white,
                               fontWeight: FontWeight.bold,
@@ -80,9 +83,9 @@ class NetworkSelector extends StatelessWidget {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 6),
                       Text(
-                        network,
+                        airtimeNetwork.network,
                         style: TextStyle(
                           fontSize: 11,
                           fontWeight: isSelected
@@ -91,6 +94,28 @@ class NetworkSelector extends StatelessWidget {
                           color: isSelected ? color : Colors.grey[700],
                         ),
                       ),
+                      // Discount badge — only shown for airtime (showDiscount: true)
+                      if (showDiscount && airtimeNetwork.hasDiscount) ...[
+                        const SizedBox(height: 4),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.green[100],
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Text(
+                            '${(airtimeNetwork.ratePercent * 100).toStringAsFixed(0)}% off',
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.green[700],
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),

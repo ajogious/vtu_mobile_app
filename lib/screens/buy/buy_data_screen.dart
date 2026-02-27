@@ -1,9 +1,12 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../../models/airtime_network_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/wallet_provider.dart';
 import '../../providers/network_provider.dart';
@@ -45,11 +48,14 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
   DataPlan? _selectedPlan;
   bool _saveBeneficiary = false;
   bool _isLoadingPlans = false;
+  bool _isLoadingNetworks = true;
   bool _isProcessing = false;
   String? _loadPlansError;
   bool _plansFromCache = false;
 
-  List<DataPlan> _allPlans = [];
+  List<AirtimeNetwork> _airtimeNetworks = [];
+  List<DataPlan> _allNetworkPlans = []; // all plans across all networks
+  List<DataPlan> _allPlans = [];        // plans for the selected network
   List<DataPlan> _filteredPlans = [];
   List<DataPlan> _searchedPlans = [];
   List<String> _dataTypes = [];
@@ -61,6 +67,7 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
     super.initState();
     _loadBeneficiaries();
     _loadRecentTransactions();
+    _loadAllDataPlans();
     _searchController.addListener(_onSearchChanged);
   }
 
@@ -69,6 +76,77 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
     _phoneController.dispose();
     _searchController.dispose();
     super.dispose();
+  }
+
+  // Load ALL plans from the data API, extract network names dynamically,
+  // and store plans locally for client-side filtering.
+  Future<void> _loadAllDataPlans() async {
+    final isOnline = context.read<NetworkProvider>().isOnline;
+
+    if (!isOnline) {
+      // Try to restore networks from any cached network's plans
+      final fallbackNetworks = ['MTN', 'GLO', 'AIRTEL', '9MOBILE'];
+      final List<DataPlan> cached = [];
+      for (final n in fallbackNetworks) {
+        final plans = CacheService.getCachedDataPlans(n);
+        if (plans != null) cached.addAll(plans);
+      }
+      if (cached.isNotEmpty) {
+        final networks = cached.map((p) => p.network).toSet().toList();
+        setState(() {
+          _allNetworkPlans = cached;
+          _airtimeNetworks = networks
+              .map((n) => AirtimeNetwork(network: n, serviceKey: ''))
+              .toList();
+          _isLoadingNetworks = false;
+        });
+      } else {
+        if (mounted) {
+          UiHelpers.showSnackBar(
+            context,
+            'No internet and no cached plans available',
+            isError: true,
+          );
+        }
+        setState(() => _isLoadingNetworks = false);
+      }
+      return;
+    }
+
+    // Fetch ALL plans (no network filter) to derive available networks
+    final authService = context.read<AuthProvider>().authService;
+    final result = await authService.api.getDataPlans();
+
+    if (!mounted) return;
+
+    if (result.success && result.data != null && result.data!.isNotEmpty) {
+      final plans = result.data!;
+      // Extract unique, ordered network names from the response
+      final networks = plans.map((p) => p.network).toSet().toList();
+
+      // Cache plans per-network for offline use
+      for (final network in networks) {
+        final netPlans = plans.where((p) => p.network == network).toList();
+        await CacheService.cacheDataPlans(network, netPlans);
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _allNetworkPlans = plans;
+        _airtimeNetworks = networks
+            .map((n) => AirtimeNetwork(network: n, serviceKey: ''))
+            .toList();
+        _isLoadingNetworks = false;
+      });
+    } else {
+      if (!mounted) return;
+      setState(() => _isLoadingNetworks = false);
+      UiHelpers.showSnackBar(
+        context,
+        result.error ?? 'Failed to load data plans',
+        isError: true,
+      );
+    }
   }
 
   void _loadBeneficiaries() {
@@ -85,9 +163,10 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
   }
 
   void _loadRecentTransactions() {
+    // FIX: use allTransactions (unfiltered) so recent purchases always show
     final transactions = context
         .read<TransactionProvider>()
-        .transactions
+        .allTransactions
         .where((t) => t.type == TransactionType.data)
         .take(5)
         .toList();
@@ -250,75 +329,32 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
       _selectedNetwork = network;
       _selectedDataType = null;
       _selectedPlan = null;
-      _dataTypes = [];
-      _filteredPlans = [];
-      _searchedPlans = [];
+      _loadPlansError = null;
       _searchController.clear();
     });
 
-    _loadDataPlans(network);
+    // Filter from already-loaded plans — no second API call needed
+    _applyNetworkFilter(network);
   }
 
-  Future<void> _loadDataPlans(String network) async {
-    final isOnline = context.read<NetworkProvider>().isOnline;
+  void _applyNetworkFilter(String network) {
+    final plans = _allNetworkPlans
+        .where((p) => p.network == network)
+        .toList();
 
-    // Try cache first when offline
-    final cachedPlans = CacheService.getCachedDataPlans(network);
+    final types = plans.map((p) => p.type).toSet().toList();
 
-    if (!isOnline) {
-      if (cachedPlans != null) {
-        setState(() {
-          _plansFromCache = true;
-          _allPlans = cachedPlans;
-          _dataTypes = _allPlans.map((p) => p.type).toSet().toList();
-          if (_dataTypes.isNotEmpty) {
-            _selectedDataType = _dataTypes.first;
-            _filterPlansByType(_selectedDataType!);
-          }
-        });
-      } else {
-        UiHelpers.showSnackBar(
-          context,
-          'No internet and no cached plans available',
-          isError: true,
-        );
+    setState(() {
+      _plansFromCache = false;
+      _allPlans = plans;
+      _dataTypes = types;
+      _filteredPlans = [];
+      _searchedPlans = [];
+      if (types.isNotEmpty) {
+        _selectedDataType = types.first;
+        _filterPlansByType(types.first);
       }
-      return;
-    }
-
-    setState(() {
-      _isLoadingPlans = true;
     });
-
-    final authService = context.read<AuthProvider>().authService;
-    final result = await authService.api.getDataPlans(network: network);
-
-    if (!mounted) return;
-
-    setState(() {
-      _isLoadingPlans = false;
-    });
-
-    if (result.success && result.data != null) {
-      final plans = result.data!;
-
-      // Cache plans for offline use
-      await CacheService.cacheDataPlans(network, plans);
-
-      setState(() {
-        _plansFromCache = false;
-        _allPlans = plans;
-        _dataTypes = _allPlans.map((plan) => plan.type).toSet().toList();
-        if (_dataTypes.isNotEmpty) {
-          _selectedDataType = _dataTypes.first;
-          _filterPlansByType(_selectedDataType!);
-        }
-      });
-    } else {
-      setState(() {
-        _loadPlansError = result.error ?? 'Failed to load data plans';
-      });
-    }
   }
 
   void _filterPlansByType(String type) {
@@ -351,52 +387,39 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
     setState(() {
       _phoneController.text = beneficiary['phone'] ?? '';
       _selectedNetwork = beneficiary['network'];
-
-      if (_selectedNetwork != null) {
-        _loadDataPlans(_selectedNetwork!);
-
-        if (beneficiary['data_type'] != null) {
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (_dataTypes.contains(beneficiary['data_type'])) {
-              _filterPlansByType(beneficiary['data_type']!);
-            }
-          });
-        }
-      }
     });
+
+    if (_selectedNetwork != null) {
+      _applyNetworkFilter(_selectedNetwork!);
+      final dataType = beneficiary['data_type'];
+      if (dataType != null && _dataTypes.contains(dataType)) {
+        _filterPlansByType(dataType);
+      }
+    }
   }
 
   void _selectFromTransaction(Transaction transaction) {
     setState(() {
       _phoneController.text = transaction.beneficiary ?? '';
       _selectedNetwork = transaction.network;
+    });
 
-      if (_selectedNetwork != null) {
-        _loadDataPlans(_selectedNetwork!);
-
-        final dataType = transaction.metadata?['data_type'];
-        if (dataType != null) {
-          Future.delayed(const Duration(milliseconds: 500), () {
-            if (_dataTypes.contains(dataType)) {
-              _filterPlansByType(dataType);
-
-              final bundle = transaction.metadata?['bundle'];
-              if (bundle != null) {
-                Future.delayed(const Duration(milliseconds: 200), () {
-                  final plan = _searchedPlans.firstWhere(
-                    (p) => p.name == bundle,
-                    orElse: () => _searchedPlans.first,
-                  );
-                  setState(() {
-                    _selectedPlan = plan;
-                  });
-                });
-              }
-            }
-          });
+    if (_selectedNetwork != null) {
+      _applyNetworkFilter(_selectedNetwork!);
+      final dataType = transaction.metadata?['data_type'];
+      if (dataType != null && _dataTypes.contains(dataType)) {
+        _filterPlansByType(dataType);
+        // Match by plan id stored in metadata
+        final planId = transaction.metadata?['plan_id'];
+        if (planId != null && _searchedPlans.isNotEmpty) {
+          final plan = _searchedPlans.firstWhere(
+            (p) => p.id == planId,
+            orElse: () => _searchedPlans.first,
+          );
+          setState(() => _selectedPlan = plan);
         }
       }
-    });
+    }
   }
 
   Future<void> _showConfirmationDialog() async {
@@ -412,6 +435,22 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
         context,
         'Please select a data plan',
         isError: true,
+      );
+      return;
+    }
+
+    final isOnline = context.read<NetworkProvider>().isOnline;
+    if (!isOnline) {
+      ErrorHandler.handleOfflineMode(context);
+      return;
+    }
+
+    final balance = context.read<WalletProvider>().balance;
+    if (balance < _selectedPlan!.price) {
+      ErrorHandler.handleInsufficientBalance(
+        context,
+        balance,
+        _selectedPlan!.price,
       );
       return;
     }
@@ -495,19 +534,15 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
     final phone = _phoneController.text.trim();
     final amount = _selectedPlan!.price;
 
-    final balance = context.read<WalletProvider>().balance;
-    if (balance < amount) {
-      ErrorHandler.handleInsufficientBalance(context, balance, amount);
-      return;
-    }
-
-    final pinVerified = await showPinVerificationDialog(
+    final serverPinSet = context.read<AuthProvider>().user?.pinSet == true;
+    final verifiedPin = await showPinVerificationDialog(
       context,
       title: 'Enter PIN',
       subtitle: 'Authorize purchase of ${_selectedPlan!.name}',
+      serverPinSet: serverPinSet,
     );
 
-    if (!pinVerified) {
+    if (verifiedPin == null) {
       UiHelpers.showSnackBar(context, 'Transaction cancelled', isError: true);
       return;
     }
@@ -528,59 +563,58 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
       }
     }
 
-    setState(() {
-      _isProcessing = true;
-    });
+    setState(() => _isProcessing = true);
 
     final authService = context.read<AuthProvider>().authService;
+
     final result = await authService.api.buyData(
-      network: _selectedNetwork!,
-      dataType: _selectedDataType!,
-      dataPlan: _selectedPlan!.id,
+      network: _selectedNetwork!, // "MTN" ✓
+      dataType: _selectedDataType!, // "DATA SHARE" ✓
+      dataPlan: _selectedPlan!.id, // "8" → parsed to int in API layer ✓
       number: phone,
-      pincode: '12345',
+      pincode: verifiedPin,
     );
 
     if (!mounted) return;
-
-    setState(() {
-      _isProcessing = false;
-    });
+    setState(() => _isProcessing = false);
 
     if (result.success && result.data != null) {
       await _saveBeneficiaryToStorage();
 
       final walletProvider = context.read<WalletProvider>();
+      final balanceBefore = walletProvider.balance;
       walletProvider.deductBalance(amount);
 
       final transaction = Transaction(
-        id: result.data!['transaction_id'],
+        id: result.data!['transaction_id'] ?? '',
         type: TransactionType.data,
         network: _selectedNetwork!,
         amount: amount,
         status: TransactionStatus.success,
         createdAt: DateTime.now(),
         beneficiary: phone,
-        reference: result.data!['reference'],
-        balanceBefore: result.data!['balance'] + amount,
-        balanceAfter: result.data!['balance'],
+        reference: result.data!['transaction_id'] ?? '',
+        balanceBefore: balanceBefore,
+        balanceAfter: balanceBefore - amount,
         metadata: {
           'data_type': _selectedDataType!,
           'bundle': _selectedPlan!.name,
           'validity': _selectedPlan!.validity,
+          // FIX: store plan id so repeat purchases can restore selection exactly
+          'plan_id': _selectedPlan!.id,
         },
       );
 
       context.read<TransactionProvider>().addTransaction(transaction);
 
-      // Fire notification
       await NotificationService.transactionSuccess(transaction);
 
-      // Check low balance
       final newBalance = context.read<WalletProvider>().balance;
       if (newBalance < 500) {
         await NotificationService.lowBalance(newBalance);
       }
+
+      if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
@@ -588,6 +622,7 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
           builder: (_) => DataSuccessScreen(
             transaction: transaction,
             dataPlan: _selectedPlan!,
+            providerMessage: result.data!['message']?.toString(),
           ),
         ),
       );
@@ -616,10 +651,21 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
                 children: [
                   OfflineBanner(isOffline: !networkProvider.isOnline),
 
-                  NetworkSelector(
-                    selectedNetwork: _selectedNetwork,
-                    onNetworkSelected: _onNetworkSelected,
-                  ),
+                  _isLoadingNetworks
+                      ? const Center(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(vertical: 24),
+                            child: CircularProgressIndicator(),
+                          ),
+                        )
+                      : NetworkSelector(
+                          selectedNetwork: _selectedNetwork,
+                          networks: _airtimeNetworks,
+                          showDiscount: false,
+                          onNetworkSelected: (airtimeNetwork) {
+                            _onNetworkSelected(airtimeNetwork.network);
+                          },
+                        ),
                   const SizedBox(height: 24),
 
                   // Phone Number with Contact Picker
@@ -641,18 +687,15 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Container(
-                        margin: const EdgeInsets.only(top: 0),
-                        child: IconButton(
-                          onPressed: _pickContact,
-                          icon: const Icon(Icons.contacts),
-                          tooltip: 'Pick from contacts',
-                          style: IconButton.styleFrom(
-                            backgroundColor: Theme.of(
-                              context,
-                            ).primaryColor.withOpacity(0.1),
-                            padding: const EdgeInsets.all(16),
-                          ),
+                      IconButton(
+                        onPressed: _pickContact,
+                        icon: const Icon(Icons.contacts),
+                        tooltip: 'Pick from contacts',
+                        style: IconButton.styleFrom(
+                          backgroundColor: Theme.of(
+                            context,
+                          ).primaryColor.withOpacity(0.1),
+                          padding: const EdgeInsets.all(16),
                         ),
                       ),
                     ],
@@ -711,9 +754,7 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
                               },
                             )
                           : null,
-                      onChanged: (value) {
-                        // Triggers _onSearchChanged via listener
-                      },
+                      onChanged: (value) {},
                     ),
                     const SizedBox(height: 16),
                   ],
@@ -772,8 +813,9 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
                       message: _loadPlansError!,
                       onRetry: () {
                         setState(() => _loadPlansError = null);
-                        if (_selectedNetwork != null)
-                          _loadDataPlans(_selectedNetwork!);
+                        if (_selectedNetwork != null) {
+                          _loadAllDataPlans();
+                        }
                       },
                     ),
 
@@ -795,11 +837,7 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
                           ? 'Clear search'
                           : null,
                       onAction: _searchController.text.isNotEmpty
-                          ? () {
-                              setState(() {
-                                _searchController.clear();
-                              });
-                            }
+                          ? () => setState(() => _searchController.clear())
                           : null,
                     ),
 
@@ -849,8 +887,7 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
                         scrollDirection: Axis.horizontal,
                         itemCount: _beneficiaries.length,
                         itemBuilder: (context, index) {
-                          final beneficiary = _beneficiaries[index];
-                          return _buildBeneficiaryCard(beneficiary);
+                          return _buildBeneficiaryCard(_beneficiaries[index]);
                         },
                       ),
                     ),
@@ -866,9 +903,9 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    ..._recentTransactions.map((transaction) {
-                      return _buildRecentTransactionCard(transaction);
-                    }),
+                    ..._recentTransactions.map(
+                      (t) => _buildRecentTransactionCard(t),
+                    ),
                   ],
                 ],
               ),
@@ -880,14 +917,11 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
   }
 
   Widget _buildPlanCard(DataPlan plan) {
-    final isSelected = _selectedPlan?.name == plan.name;
+    // FIX: compare by plan.id not plan.name — names can duplicate across types
+    final isSelected = _selectedPlan?.id == plan.id;
 
     return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedPlan = plan;
-        });
-      },
+      onTap: () => setState(() => _selectedPlan = plan),
       child: Container(
         margin: const EdgeInsets.only(bottom: 12),
         padding: const EdgeInsets.all(16),
@@ -908,11 +942,7 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
             Radio<DataPlan>(
               value: plan,
               groupValue: _selectedPlan,
-              onChanged: (value) {
-                setState(() {
-                  _selectedPlan = value;
-                });
-              },
+              onChanged: (value) => setState(() => _selectedPlan = value),
             ),
             const SizedBox(width: 12),
             Expanded(

@@ -27,8 +27,11 @@ class TransactionProvider with ChangeNotifier {
   // Getters
   List<Transaction> get transactions => _filteredTransactions;
   List<Transaction> get allTransactions => _transactions;
-  List<Transaction> get recentTransactions =>
-      _filteredTransactions.take(5).toList();
+
+  // FIX: recentTransactions always pulls from the unfiltered list
+  // so dashboard always shows latest 5 regardless of active filters
+  List<Transaction> get recentTransactions => _transactions.take(5).toList();
+
   bool get isLoading => _isLoading;
   String? get error => _error;
 
@@ -56,19 +59,21 @@ class TransactionProvider with ChangeNotifier {
   }
 
   Future<bool> fetchTransactions() async {
-    if (_isLoading) return false;
-
+    // FIX: don't guard with _isLoading — it can block legitimate refreshes
+    // after transactions. Only set the flag for UI feedback.
     _isLoading = true;
     _error = null;
     notifyListeners();
 
     try {
-      // Show cached data immediately while fetching
-      final cached = CacheService.getCachedTransactions();
-      if (cached != null && _transactions.isEmpty) {
-        _transactions = cached;
-        _applyFilters();
-        notifyListeners();
+      // Show cached data immediately while API call is in-flight
+      if (_transactions.isEmpty) {
+        final cached = CacheService.getCachedTransactions();
+        if (cached != null) {
+          _transactions = cached;
+          _applyFilters();
+          notifyListeners();
+        }
       }
 
       // Call real API
@@ -79,24 +84,24 @@ class TransactionProvider with ChangeNotifier {
         await CacheService.cacheTransactions(_transactions);
         _error = null;
       } else {
-        // If API fails but we have cache, keep showing cache silently
+        // API failed — keep existing data (cache or previous fetch), set error
+        // only if we have nothing to show
         if (_transactions.isEmpty) {
           _error = result?.error ?? 'Failed to load transactions';
         }
       }
-
-      _isLoading = false;
-      _applyFilters();
-      notifyListeners();
-      return true;
     } catch (e) {
-      _isLoading = false;
       if (_transactions.isEmpty) {
         _error = e.toString();
       }
+    } finally {
+      // FIX: always clear loading in finally so it never gets stuck
+      _isLoading = false;
+      _applyFilters();
       notifyListeners();
-      return false;
     }
+
+    return true;
   }
 
   void setTypeFilter(String type) {

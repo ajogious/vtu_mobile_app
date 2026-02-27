@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 import '../../providers/referral_provider.dart';
 import '../../providers/wallet_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../providers/auth_provider.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_textfield.dart';
 import '../widgets/pin_verification_dialog.dart';
@@ -54,14 +55,16 @@ class _WithdrawEarningsScreenState extends State<WithdrawEarningsScreen> {
     }
 
     // Verify PIN
-    final pinVerified = await showPinVerificationDialog(
+    final serverPinSet = context.read<AuthProvider>().user?.pinSet == true;
+    final verifiedPin = await showPinVerificationDialog(
       context,
       title: 'Confirm Withdrawal',
       subtitle:
           'Enter PIN to withdraw ₦${NumberFormat('#,##0').format(amount)}',
+      serverPinSet: serverPinSet,
     );
 
-    if (!pinVerified) {
+    if (verifiedPin == null) {
       UiHelpers.showSnackBar(context, 'Withdrawal cancelled', isError: true);
       return;
     }
