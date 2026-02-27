@@ -55,7 +55,7 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
 
   List<AirtimeNetwork> _airtimeNetworks = [];
   List<DataPlan> _allNetworkPlans = []; // all plans across all networks
-  List<DataPlan> _allPlans = [];        // plans for the selected network
+  List<DataPlan> _allPlans = []; // plans for the selected network
   List<DataPlan> _filteredPlans = [];
   List<DataPlan> _searchedPlans = [];
   List<String> _dataTypes = [];
@@ -338,9 +338,7 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
   }
 
   void _applyNetworkFilter(String network) {
-    final plans = _allNetworkPlans
-        .where((p) => p.network == network)
-        .toList();
+    final plans = _allNetworkPlans.where((p) => p.network == network).toList();
 
     final types = plans.map((p) => p.type).toSet().toList();
 
@@ -627,7 +625,21 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
         ),
       );
     } else {
-      ErrorHandler.handleApiError(context, result.error ?? 'Purchase failed');
+      // Wait one frame so LoadingOverlay finishes rebuilding before showing UI
+      await Future.delayed(Duration.zero);
+      if (!mounted) return;
+
+      final errorMsg = result.error ?? 'Purchase failed';
+      // Show as SnackBar first — ScaffoldMessenger works reliably after async gaps
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMsg),
+          backgroundColor: Colors.red[700],
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
     }
   }
 

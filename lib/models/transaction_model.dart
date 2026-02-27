@@ -166,20 +166,26 @@ class Transaction {
   }
 
   static TransactionStatus _parseStatus(String? status) {
-    switch (status?.toLowerCase()) {
+    final normalized = status?.toLowerCase().trim();
+
+    switch (normalized) {
       case 'success':
       case 'successful':
       case 'completed':
         return TransactionStatus.success;
+
       case 'pending':
       case 'processing':
         return TransactionStatus.pending;
+
       case 'failed':
       case 'declined':
       case 'rejected':
+      case 'reversed': // 🔥 ADD THIS
+      case 'error':
         return TransactionStatus.failed;
       default:
-        return TransactionStatus.pending;
+        return TransactionStatus.failed; // safer fallback
     }
   }
 

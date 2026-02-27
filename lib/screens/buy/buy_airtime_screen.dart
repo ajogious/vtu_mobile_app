@@ -501,7 +501,20 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
         ),
       );
     } else {
-      ErrorHandler.handleApiError(context, result.error ?? 'Purchase failed');
+      // Wait one frame so LoadingOverlay finishes rebuilding before showing UI
+      await Future.delayed(Duration.zero);
+      if (!mounted) return;
+
+      final errorMsg = result.error ?? 'Purchase failed';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMsg),
+          backgroundColor: Colors.red[700],
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
     }
   }
 

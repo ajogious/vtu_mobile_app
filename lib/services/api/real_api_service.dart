@@ -675,29 +675,40 @@ class RealApiService implements ApiService {
       );
 
       final responseData = response.data;
+      final topLevelMessage =
+          responseData['message']?.toString() ?? 'Purchase failed';
 
       if (responseData['ok'] == true) {
-        final data = responseData['data'] ?? responseData;
+        // Use dynamic access — avoids silent cast failures on different map types
+        final dynamic data = responseData['data'];
 
         // Check 3rd-party status — a non-SUCCESSFUL status means the provider
         // processed but refunded (e.g. invalid number, low balance).
-        final status = (data['status'] ?? '').toString().toUpperCase();
+        final String status = (data != null ? (data['status'] ?? '') : '')
+            .toString()
+            .toUpperCase();
         if (status.isNotEmpty && status != 'SUCCESSFUL') {
-          final reason = data['message']?.toString();
-          return ApiResult.failure(
-            (reason != null && reason.isNotEmpty)
-                ? reason
-                : 'Transaction failed: $status',
-          );
+          // Prefer the nested provider message; fall back to top-level; then status
+          final String? providerMessage = data != null
+              ? data['message']?.toString()
+              : null;
+          final String errorMessage =
+              (providerMessage != null && providerMessage.isNotEmpty)
+              ? providerMessage
+              : (topLevelMessage.isNotEmpty
+                    ? topLevelMessage
+                    : 'Transaction failed: $status');
+          return ApiResult.failure(errorMessage);
         }
 
         return ApiResult.success({
-          'transaction_id': data['transaction_id']?.toString() ?? '',
+          'transaction_id':
+              (data != null ? data['transaction_id']?.toString() : null) ?? '',
           'status': status,
         });
       }
 
-      return ApiResult.failure(responseData['message'] ?? 'Purchase failed');
+      return ApiResult.failure(topLevelMessage);
     } on DioException catch (e) {
       return ApiResult.failure(_handleDioError(e));
     } catch (e) {
@@ -709,17 +720,21 @@ class RealApiService implements ApiService {
   Future<ApiResult<Map<String, dynamic>>> buyData({
     required String network,
     required String dataType,
-    required String dataPlan, // plan id as String e.g. "8"
+    required String dataPlan,
     required String number,
     required String pincode,
   }) async {
     try {
       final response = await _dio.post(
         ApiConfig.buyDataEndpoint,
+        options: Options(
+          validateStatus: (status) {
+            return status != null && status < 600;
+          },
+        ),
         data: {
           'network': network,
           'type': dataType,
-          // FIX: API requires dataBundle as int, not string
           'dataBundle': int.tryParse(dataPlan) ?? dataPlan,
           'number': number,
           'pincode': pincode,
@@ -728,28 +743,41 @@ class RealApiService implements ApiService {
 
       final responseData = response.data;
 
-      if (responseData['ok'] == true) {
-        final data = responseData['data'] ?? responseData;
+      // ================= DEBUG SECTION =================
+      print("============== BUY DATA DEBUG ==============");
+      print("FULL RESPONSE DATA: $responseData");
+      print("TYPE OF response.data: ${response.data.runtimeType}");
 
-        // Check 3rd-party status
-        final status = (data['status'] ?? '').toString().toUpperCase();
-        if (status.isNotEmpty && status != 'SUCCESSFUL') {
-          final reason = data['message']?.toString();
-          return ApiResult.failure(
-            (reason != null && reason.isNotEmpty)
-                ? reason
-                : 'Transaction failed: $status',
-          );
-        }
+      print("TOP LEVEL MESSAGE: ${responseData['message']}");
+      print("TOP LEVEL OK: ${responseData['ok']}");
 
-        return ApiResult.success({
-          'transaction_id': data['transaction_id']?.toString() ?? '',
-          'status': status,
-          'message': data['message']?.toString() ?? '',
-        });
+      print("DATA FIELD RAW: ${responseData['data']}");
+      print("TYPE OF DATA FIELD: ${responseData['data']?.runtimeType}");
+
+      print("STATUS FIELD: ${responseData['data']?['status']}");
+      print("PROVIDER MESSAGE: ${responseData['data']?['message']}");
+      print("============================================");
+      // =================================================
+
+      final Map<String, dynamic> body = Map<String, dynamic>.from(responseData);
+
+      final Map<String, dynamic>? data = body['data'] != null
+          ? Map<String, dynamic>.from(body['data'])
+          : null;
+
+      final String status = (data?['status'] ?? '').toString().toUpperCase();
+
+      if (status != 'SUCCESSFUL') {
+        return ApiResult.failure(
+          data?['message']?.toString() ?? 'Transaction failed',
+        );
       }
 
-      return ApiResult.failure(responseData['message'] ?? 'Purchase failed');
+      return ApiResult.success({
+        'transaction_id': data?['transaction_id']?.toString() ?? '',
+        'status': status,
+        'message': data?['message']?.toString() ?? '',
+      });
     } on DioException catch (e) {
       return ApiResult.failure(_handleDioError(e));
     } catch (e) {
@@ -776,17 +804,43 @@ class RealApiService implements ApiService {
       );
 
       final responseData = response.data;
+      final topLevelMessage =
+          responseData['message']?.toString() ?? 'Purchase failed';
 
       if (responseData['ok'] == true) {
-        final data = responseData['data'] ?? responseData;
+        final dynamic data = responseData['data'];
+
+        // Check 3rd-party status — REVERSED means the provider rejected the request
+        final String status = (data != null ? (data['status'] ?? '') : '')
+            .toString()
+            .toUpperCase();
+        if (status.isNotEmpty && status != 'SUCCESSFUL') {
+          final String? providerMessage = data != null
+              ? data['message']?.toString()
+              : null;
+          return ApiResult.failure(
+            (providerMessage != null && providerMessage.isNotEmpty)
+                ? providerMessage
+                : (topLevelMessage.isNotEmpty
+                      ? topLevelMessage
+                      : 'Transaction failed: $status'),
+          );
+        }
+
         return ApiResult.success({
-          'transaction_id': data['transaction_id'] ?? data['id'],
-          'reference': data['reference'],
-          'balance': (data['balance'] as num?)?.toDouble() ?? 0,
+          'transaction_id':
+              (data != null
+                  ? (data['transaction_id'] ?? data['id'])?.toString()
+                  : null) ??
+              '',
+          'reference': data != null ? data['reference']?.toString() : null,
+          'balance': data != null
+              ? (data['balance'] as num?)?.toDouble() ?? 0
+              : 0.0,
         });
       }
 
-      return ApiResult.failure(responseData['message'] ?? 'Purchase failed');
+      return ApiResult.failure(topLevelMessage);
     } on DioException catch (e) {
       return ApiResult.failure(_handleDioError(e));
     } catch (e) {
@@ -813,19 +867,45 @@ class RealApiService implements ApiService {
       );
 
       final responseData = response.data;
+      final topLevelMessage =
+          responseData['message']?.toString() ?? 'Purchase failed';
 
       if (responseData['ok'] == true) {
-        final data = responseData['data'] ?? responseData;
+        final dynamic data = responseData['data'];
+
+        // Check 3rd-party status — REVERSED means the provider rejected the request
+        final String status = (data != null ? (data['status'] ?? '') : '')
+            .toString()
+            .toUpperCase();
+        if (status.isNotEmpty && status != 'SUCCESSFUL') {
+          final String? providerMessage = data != null
+              ? data['message']?.toString()
+              : null;
+          return ApiResult.failure(
+            (providerMessage != null && providerMessage.isNotEmpty)
+                ? providerMessage
+                : (topLevelMessage.isNotEmpty
+                      ? topLevelMessage
+                      : 'Transaction failed: $status'),
+          );
+        }
+
         return ApiResult.success({
-          'transaction_id': data['transaction_id'] ?? data['id'],
-          'reference': data['reference'],
-          'balance': (data['balance'] as num?)?.toDouble() ?? 0,
-          'token': data['token'],
-          'units': data['units'],
+          'transaction_id':
+              (data != null
+                  ? (data['transaction_id'] ?? data['id'])?.toString()
+                  : null) ??
+              '',
+          'reference': data != null ? data['reference']?.toString() : null,
+          'balance': data != null
+              ? (data['balance'] as num?)?.toDouble() ?? 0
+              : 0.0,
+          'token': data != null ? data['token']?.toString() : null,
+          'units': data != null ? data['units']?.toString() : null,
         });
       }
 
-      return ApiResult.failure(responseData['message'] ?? 'Purchase failed');
+      return ApiResult.failure(topLevelMessage);
     } on DioException catch (e) {
       return ApiResult.failure(_handleDioError(e));
     } catch (e) {
@@ -849,6 +929,18 @@ class RealApiService implements ApiService {
 
       if (responseData['ok'] == true) {
         final data = responseData['data'] ?? responseData;
+
+        // Check 3rd-party status — REVERSED means the provider rejected the request
+        final status = (data['status'] ?? '').toString().toUpperCase();
+        if (status.isNotEmpty && status != 'SUCCESSFUL') {
+          final reason = data['message']?.toString();
+          return ApiResult.failure(
+            (reason != null && reason.isNotEmpty)
+                ? reason
+                : 'Transaction failed: $status',
+          );
+        }
+
         return ApiResult.success({
           'transaction_id': data['transaction_id'] ?? data['id'],
           'reference': data['reference'],
@@ -881,6 +973,18 @@ class RealApiService implements ApiService {
 
       if (responseData['ok'] == true) {
         final data = responseData['data'] ?? responseData;
+
+        // Check 3rd-party status — REVERSED means the provider rejected the request
+        final status = (data['status'] ?? '').toString().toUpperCase();
+        if (status.isNotEmpty && status != 'SUCCESSFUL') {
+          final reason = data['message']?.toString();
+          return ApiResult.failure(
+            (reason != null && reason.isNotEmpty)
+                ? reason
+                : 'Transaction failed: $status',
+          );
+        }
+
         return ApiResult.success({
           'transaction_id': data['transaction_id'] ?? data['id'],
           'reference': data['reference'],

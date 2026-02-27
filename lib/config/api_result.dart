@@ -22,12 +22,12 @@ class ApiResult<T> {
   }
 
   // Failure factory
-  factory ApiResult.failure(String error, {String message = 'Failed'}) {
+  factory ApiResult.failure(String message) {
     return ApiResult._(
       success: false,
       message: message,
       data: null,
-      error: error,
+      error: message,
     );
   }
 

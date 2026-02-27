@@ -448,7 +448,18 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
         ),
       );
     } else {
-      ErrorHandler.handleApiError(context, result.error ?? 'Purchase failed');
+      await Future.delayed(Duration.zero);
+      if (!mounted) return;
+      final errorMsg = result.error ?? 'Purchase failed';
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(errorMsg),
+          backgroundColor: Colors.red[700],
+          duration: const Duration(seconds: 5),
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+        ),
+      );
     }
   }
 
