@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/network_provider.dart';
 import '../../providers/transaction_provider.dart';
+import '../../providers/wallet_provider.dart';
 import '../../services/cache_service.dart';
 import '../../utils/ui_helpers.dart';
 import '../widgets/cached_data_badge.dart';
@@ -57,7 +58,10 @@ class _TransactionListScreenState extends State<TransactionListScreen> {
       return;
     }
 
-    await context.read<TransactionProvider>().fetchTransactions();
+    await Future.wait([
+      context.read<TransactionProvider>().fetchTransactions(),
+      context.read<WalletProvider>().loadBalance(forceRefresh: true),
+    ]);
   }
 
   Future<void> _showFilters() async {

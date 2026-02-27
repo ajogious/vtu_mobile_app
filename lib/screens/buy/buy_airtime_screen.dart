@@ -21,6 +21,7 @@ import '../widgets/offline_purchase_blocker.dart';
 import '../../utils/validators.dart';
 import '../../utils/ui_helpers.dart';
 import '../../utils/error_handler.dart';
+import '../../utils/nigeria_network_validator.dart';
 import '../../services/storage_service.dart';
 import '../../models/transaction_model.dart';
 import '../../services/notification_service.dart';
@@ -46,6 +47,10 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
   bool _loadingNetworks = true;
   List<AirtimeNetwork> _airtimeNetworks = [];
 
+  // Shown below the phone field when a network mismatch is detected.
+  // This is a soft warning only — ported numbers are allowed through.
+  String? _networkMismatchWarning;
+
   List<Map<String, String>> _beneficiaries = [];
   List<Transaction> _recentTransactions = [];
 
@@ -57,13 +62,42 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
     _loadBeneficiaries();
     _loadRecentTransactions();
     _loadAirtimeNetworks();
+    _phoneController.addListener(_onPhoneChanged);
   }
 
   @override
   void dispose() {
+    _phoneController.removeListener(_onPhoneChanged);
     _phoneController.dispose();
     _amountController.dispose();
     super.dispose();
+  }
+
+  void _onPhoneChanged() {
+    _updateMismatchWarning();
+  }
+
+  /// Updates the inline warning label below the phone field.
+  /// Only shows when we have a full 11-digit number AND a selected network
+  /// AND the prefix suggests a different network.
+  void _updateMismatchWarning() {
+    final phone = _phoneController.text.trim();
+
+    if (phone.length < 11 || _selectedNetwork == null) {
+      if (_networkMismatchWarning != null) {
+        setState(() => _networkMismatchWarning = null);
+      }
+      return;
+    }
+
+    final warning = NigeriaNetworkValidator.getMismatchWarning(
+      phone,
+      _selectedNetwork!,
+    );
+
+    if (warning != _networkMismatchWarning) {
+      setState(() => _networkMismatchWarning = warning);
+    }
   }
 
   Future<void> _loadAirtimeNetworks() async {
@@ -78,7 +112,6 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
         _loadingNetworks = false;
       });
     } else {
-      // Fallback to basic network list if API fails
       setState(() {
         _airtimeNetworks = [
           const AirtimeNetwork(network: 'MTN', serviceKey: 'MTN_VTU'),
@@ -105,7 +138,6 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
   }
 
   void _loadRecentTransactions() {
-    // FIX: use allTransactions (unfiltered) so recent purchases always show
     final transactions = context
         .read<TransactionProvider>()
         .allTransactions
@@ -237,11 +269,19 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
         setState(() {
           _phoneController.text = phone;
         });
-        UiHelpers.showSnackBar(context, 'Contact added successfully');
+
+        // Auto-detect network and offer to switch — but don't force it
+        final detectedNetwork = NigeriaNetworkValidator.getNetworkForNumber(
+          phone,
+        );
+        if (detectedNetwork != null && _selectedNetwork != detectedNetwork) {
+          _suggestNetworkSwitch(detectedNetwork, phone);
+        } else {
+          UiHelpers.showSnackBar(context, 'Contact added successfully');
+        }
       }
     } on Exception catch (e) {
       if (!mounted) return;
-
       String errorMessage = 'Failed to pick contact';
       if (e.toString().contains('PlatformException')) {
         errorMessage = 'Error accessing contacts. Please try again.';
@@ -249,7 +289,6 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
         errorMessage =
             'Contact plugin not properly installed. Please restart the app.';
       }
-
       UiHelpers.showSnackBar(context, errorMessage, isError: true);
     } catch (e) {
       if (!mounted) return;
@@ -258,6 +297,52 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
         'An unexpected error occurred',
         isError: true,
       );
+    }
+  }
+
+  /// Suggests switching network after a contact is picked.
+  /// User can decline — they may know the number is ported.
+  Future<void> _suggestNetworkSwitch(
+    String detectedNetwork,
+    String phone,
+  ) async {
+    final shouldSwitch = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Different Network Detected'),
+        content: Text(
+          '$phone looks like a $detectedNetwork number.\n\n'
+          'Would you like to switch to $detectedNetwork?\n\n'
+          'If this number has been ported, keep your current selection.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep Current'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('Switch to $detectedNetwork'),
+          ),
+        ],
+      ),
+    );
+
+    if (!mounted) return;
+
+    if (shouldSwitch == true) {
+      final matched = _airtimeNetworks
+          .where((n) => n.network == detectedNetwork)
+          .firstOrNull;
+      if (matched != null) {
+        setState(() {
+          _selectedNetwork = matched.network;
+          _selectedAirtimeNetwork = matched;
+          _networkMismatchWarning = null;
+        });
+      }
+    } else {
+      UiHelpers.showSnackBar(context, 'Contact added successfully');
     }
   }
 
@@ -273,6 +358,7 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
       _selectedAirtimeNetwork = _airtimeNetworks
           .where((n) => n.network == networkName)
           .firstOrNull;
+      _networkMismatchWarning = null;
     });
   }
 
@@ -284,6 +370,7 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
           .where((n) => n.network == transaction.network)
           .firstOrNull;
       _amountController.text = NumberFormat('#,###').format(transaction.amount);
+      _networkMismatchWarning = null;
     });
   }
 
@@ -297,18 +384,84 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
       return;
     }
 
+    final phone = _phoneController.text.trim();
+
+    // ── SOFT NETWORK MISMATCH CHECK ────────────────────────────────────────
+    // We warn the user if the prefix suggests a different network, but we
+    // allow them to proceed — the number may have been ported.
+    // This is intentionally NOT a hard block.
+    final mismatchWarning = NigeriaNetworkValidator.getMismatchWarning(
+      phone,
+      _selectedNetwork!,
+    );
+
+    if (mismatchWarning != null) {
+      final proceedAnyway = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Row(
+            children: [
+              Icon(Icons.warning_amber_rounded, color: Colors.orange[700]),
+              const SizedBox(width: 8),
+              const Text('Network Mismatch'),
+            ],
+          ),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(mismatchWarning),
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.blue.withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  'If this number has been ported to $_selectedNetwork, '
+                  'tap "Yes, Proceed".\n\nOtherwise tap "Go Back" and '
+                  'correct the network or phone number.',
+                  style: const TextStyle(fontSize: 13),
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Go Back'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange[700],
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Yes, Proceed'),
+            ),
+          ],
+        ),
+      );
+
+      // User chose to go back and fix it
+      if (proceedAnyway != true) return;
+
+      // User confirmed they want to proceed (ported number)
+      // Fall through to the normal confirmation dialog below
+    }
+    // ──────────────────────────────────────────────────────────────────────
+
     final isOnline = context.read<NetworkProvider>().isOnline;
     if (!isOnline) {
       ErrorHandler.handleOfflineMode(context);
       return;
     }
 
-    final phone = _phoneController.text.trim();
     final airtimeAmount = double.parse(
       _amountController.text.replaceAll(',', '').trim(),
     );
 
-    // How much is deducted from wallet (airtime value minus discount)
     final discountRate = _selectedAirtimeNetwork?.ratePercent ?? 0;
     final discountAmount = airtimeAmount * discountRate;
     final costToUser = airtimeAmount - discountAmount;
@@ -444,7 +597,6 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
     final authService = context.read<AuthProvider>().authService;
 
     final result = await authService.api.buyAirtime(
-      // FIX: send plain network name (e.g. "MTN"), not serviceKey ("MTN_VTU")
       network: _selectedNetwork!,
       number: phone,
       amount: airtimeAmount,
@@ -454,20 +606,30 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
     if (!mounted) return;
     setState(() => _isProcessing = false);
 
-    if (result.success && result.data != null) {
+    // Check both ok AND data.status — third party can return ok:true with
+    // status REVERSED/FAILED which is NOT a real success.
+    final transactionStatus = result.data?['status']?.toString().toUpperCase();
+
+    final isActualSuccess =
+        result.success &&
+        result.data != null &&
+        transactionStatus != null &&
+        transactionStatus != 'REVERSED' &&
+        transactionStatus != 'FAILED' &&
+        transactionStatus != 'PENDING';
+
+    if (isActualSuccess) {
       await _saveBeneficiaryToStorage();
 
       final walletProvider = context.read<WalletProvider>();
       final balanceBefore = walletProvider.balance;
 
-      // Deduct only what the user actually paid (discounted cost)
       walletProvider.deductBalance(costToUser);
 
       final transaction = Transaction(
         id: result.data!['transaction_id'] ?? '',
         type: TransactionType.airtime,
         network: _selectedNetwork!,
-        // amount = airtime value received (shown on success screen)
         amount: airtimeAmount,
         status: TransactionStatus.success,
         createdAt: DateTime.now(),
@@ -501,11 +663,29 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
         ),
       );
     } else {
-      // Wait one frame so LoadingOverlay finishes rebuilding before showing UI
       await Future.delayed(Duration.zero);
       if (!mounted) return;
 
-      final errorMsg = result.error ?? 'Purchase failed';
+      String errorMsg;
+      if (transactionStatus == 'REVERSED') {
+        errorMsg =
+            result.data?['message'] as String? ??
+            result.error ??
+            'Transaction was reversed. Please verify the phone number and selected network are correct.';
+      } else if (transactionStatus == 'FAILED') {
+        errorMsg =
+            result.data?['message'] as String? ??
+            result.error ??
+            'Transaction failed. Please try again.';
+      } else if (transactionStatus == 'PENDING') {
+        errorMsg =
+            result.data?['message'] as String? ??
+            result.error ??
+            'Transaction is pending. Please check your transaction history.';
+      } else {
+        errorMsg = result.error ?? 'Purchase failed. Please try again.';
+      }
+
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(errorMsg),
@@ -555,6 +735,8 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
                               _selectedNetwork = airtimeNetwork.network;
                               _selectedAirtimeNetwork = airtimeNetwork;
                             });
+                            // Re-check warning when network selection changes
+                            _updateMismatchWarning();
                           },
                         ),
                   const SizedBox(height: 24),
@@ -564,17 +746,62 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Expanded(
-                        child: CustomTextField(
-                          controller: _phoneController,
-                          labelText: 'Phone Number',
-                          hintText: '08012345678',
-                          prefixIcon: Icons.phone,
-                          keyboardType: TextInputType.phone,
-                          inputFormatters: [
-                            FilteringTextInputFormatter.digitsOnly,
-                            LengthLimitingTextInputFormatter(11),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            CustomTextField(
+                              controller: _phoneController,
+                              labelText: 'Phone Number',
+                              hintText: '08012345678',
+                              prefixIcon: Icons.phone,
+                              keyboardType: TextInputType.phone,
+                              inputFormatters: [
+                                FilteringTextInputFormatter.digitsOnly,
+                                LengthLimitingTextInputFormatter(11),
+                              ],
+                              validator: Validators.nigerianPhone,
+                            ),
+
+                            // Inline soft warning — shown as the user types.
+                            // Orange, not red, because it's informational only.
+                            if (_networkMismatchWarning != null) ...[
+                              const SizedBox(height: 6),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 7,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: Colors.orange.withOpacity(0.08),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(
+                                    color: Colors.orange.withOpacity(0.3),
+                                  ),
+                                ),
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Icon(
+                                      Icons.warning_amber_rounded,
+                                      size: 15,
+                                      color: Colors.orange[700],
+                                    ),
+                                    const SizedBox(width: 6),
+                                    Expanded(
+                                      child: Text(
+                                        '$_networkMismatchWarning\n'
+                                        'If ported, you can still proceed.',
+                                        style: TextStyle(
+                                          color: Colors.orange[800],
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
                           ],
-                          validator: Validators.nigerianPhone,
                         ),
                       ),
                       const SizedBox(width: 8),

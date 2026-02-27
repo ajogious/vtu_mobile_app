@@ -666,6 +666,11 @@ class RealApiService implements ApiService {
     try {
       final response = await _dio.post(
         ApiConfig.buyAirtimeEndpoint,
+        options: Options(
+          validateStatus: (status) {
+            return status != null && status < 600;
+          },
+        ),
         data: {
           'network': network,
           'number': number,
@@ -679,19 +684,18 @@ class RealApiService implements ApiService {
           responseData['message']?.toString() ?? 'Purchase failed';
 
       if (responseData['ok'] == true) {
-        // Use dynamic access — avoids silent cast failures on different map types
-        final dynamic data = responseData['data'];
+        final Map<String, dynamic> body = Map<String, dynamic>.from(responseData);
+        final Map<String, dynamic>? data = body['data'] != null
+            ? Map<String, dynamic>.from(body['data'])
+            : null;
 
         // Check 3rd-party status — a non-SUCCESSFUL status means the provider
         // processed but refunded (e.g. invalid number, low balance).
-        final String status = (data != null ? (data['status'] ?? '') : '')
-            .toString()
-            .toUpperCase();
+        final String status = (data?['status'] ?? '').toString().toUpperCase();
+        
         if (status.isNotEmpty && status != 'SUCCESSFUL') {
           // Prefer the nested provider message; fall back to top-level; then status
-          final String? providerMessage = data != null
-              ? data['message']?.toString()
-              : null;
+          final String? providerMessage = data?['message']?.toString();
           final String errorMessage =
               (providerMessage != null && providerMessage.isNotEmpty)
               ? providerMessage
@@ -702,8 +706,7 @@ class RealApiService implements ApiService {
         }
 
         return ApiResult.success({
-          'transaction_id':
-              (data != null ? data['transaction_id']?.toString() : null) ?? '',
+          'transaction_id': data?['transaction_id']?.toString() ?? '',
           'status': status,
         });
       }
