@@ -176,7 +176,7 @@ abstract class ApiService {
 
   // ========== AIRTIME TO CASH ==========
 
-  Future<ApiResult<String>> submitATCRequest({
+  Future<ApiResult<Map<String, dynamic>>> submitATCRequest({
     required String network,
     required double amount,
     required String number,

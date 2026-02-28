@@ -684,7 +684,9 @@ class RealApiService implements ApiService {
           responseData['message']?.toString() ?? 'Purchase failed';
 
       if (responseData['ok'] == true) {
-        final Map<String, dynamic> body = Map<String, dynamic>.from(responseData);
+        final Map<String, dynamic> body = Map<String, dynamic>.from(
+          responseData,
+        );
         final Map<String, dynamic>? data = body['data'] != null
             ? Map<String, dynamic>.from(body['data'])
             : null;
@@ -692,7 +694,7 @@ class RealApiService implements ApiService {
         // Check 3rd-party status — a non-SUCCESSFUL status means the provider
         // processed but refunded (e.g. invalid number, low balance).
         final String status = (data?['status'] ?? '').toString().toUpperCase();
-        
+
         if (status.isNotEmpty && status != 'SUCCESSFUL') {
           // Prefer the nested provider message; fall back to top-level; then status
           final String? providerMessage = data?['message']?.toString();
@@ -969,7 +971,7 @@ class RealApiService implements ApiService {
     try {
       final response = await _dio.post(
         ApiConfig.buyDatacardEndpoint,
-        data: {'card_id': cardId, 'quantity': quantity, 'pincode': pincode},
+        data: {'plan_id': cardId, 'quantity': quantity, 'pincode': pincode},
       );
 
       final responseData = response.data;
@@ -1128,7 +1130,7 @@ class RealApiService implements ApiService {
   // ═══════════════════════════════════════════════════════════════════════════
 
   @override
-  Future<ApiResult<String>> submitATCRequest({
+  Future<ApiResult<Map<String, dynamic>>> submitATCRequest({
     required String network,
     required double amount,
     required String number,
@@ -1136,15 +1138,13 @@ class RealApiService implements ApiService {
     try {
       final response = await _dio.post(
         ApiConfig.atcRequestEndpoint,
-        data: {'network': network, 'amount': amount, 'number': number},
+        data: {'network': network, 'amount': amount, 'sender_phone': number},
       );
 
       final responseData = response.data;
 
       if (responseData['ok'] == true) {
-        return ApiResult.success(
-          responseData['message'] ?? 'ATC request submitted successfully',
-        );
+        return ApiResult.success(responseData['data']); // return full data map
       }
 
       return ApiResult.failure(responseData['message'] ?? 'Request failed');
@@ -1157,7 +1157,6 @@ class RealApiService implements ApiService {
 
   @override
   Future<ApiResult<List<ATCRequest>>> getATCHistory() async {
-    // TODO: Implement when backend provides ATC history endpoint
     return ApiResult.failure('ATC history endpoint not yet available');
   }
 

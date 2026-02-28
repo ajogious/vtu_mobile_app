@@ -217,20 +217,22 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
     });
 
     if (result.success && result.data != null) {
-      final providerPlans = result.data![provider] as List?;
+      final items = result.data!['items'] as List?;
       final parsedPlans = <CablePlan>[];
 
-      if (providerPlans != null) {
-        for (final plan in providerPlans) {
-          parsedPlans.add(
-            CablePlan(
-              id: plan['id'].toString(),
-              name: plan['cable_plan'].toString().trim(),
-              price: double.parse(plan['amount'].toString()),
-              duration: plan['duration'].toString().trim(),
-              provider: provider,
-            ),
-          );
+      if (items != null) {
+        for (final plan in items) {
+          if (plan['cable_type'] == provider) {
+            parsedPlans.add(
+              CablePlan(
+                id: plan['id'].toString(),
+                name: plan['cable_plan'].toString().trim(),
+                price: double.parse(plan['amount'].toString()),
+                duration: plan['duration'].toString().trim(),
+                provider: provider,
+              ),
+            );
+          }
         }
       }
 
