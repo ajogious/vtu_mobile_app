@@ -74,20 +74,48 @@ class ReferralProvider with ChangeNotifier {
     notifyListeners();
   }
 
-  Future<bool> withdrawEarnings(double amount) async {
-    if (amount > _availableBalance) return false;
-    if (amount < 500) return false;
+  Future<Map<String, dynamic>?> withdrawEarnings(
+    double amount,
+    String pincode,
+  ) async {
+    if (amount > _availableBalance) {
+      _error = 'Insufficient balance';
+      return null;
+    }
+    if (amount < 1) {
+      _error = 'Minimum withdrawal is ₦1';
+      return null;
+    }
 
     _isLoading = true;
+    _error = null;
     notifyListeners();
 
-    // TODO: wire up real withdrawal endpoint when available
-    await Future.delayed(const Duration(seconds: 2));
+    try {
+      final result = await _authProvider?.authService.api
+          .withdrawReferralEarnings(amount: amount, pincode: pincode);
 
-    _availableBalance -= amount;
+      if (result != null && result.success && result.data != null) {
+        // Use the exact commission_balance from the server if provided
+        if (result.data!['commission_balance'] != null) {
+          _availableBalance = (result.data!['commission_balance'] as num)
+              .toDouble();
+        } else {
+          _availableBalance -= amount;
+        }
+
+        _isLoading = false;
+        notifyListeners();
+        return result.data;
+      } else {
+        _error = result?.error ?? 'Withdrawal failed';
+      }
+    } catch (e) {
+      _error = e.toString();
+    }
+
     _isLoading = false;
     notifyListeners();
-
-    return true;
+    return null;
   }
 }

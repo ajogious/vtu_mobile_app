@@ -1,3 +1,5 @@
+// ignore_for_file: unused_import
+
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'dart:async';
@@ -30,7 +32,9 @@ class NotificationProvider with ChangeNotifier {
 
   void _loadNotifications() {
     final data = _storageService.getNotifications();
-    _notifications = data.map((json) => NotificationItem.fromJson(json)).toList();
+    _notifications = data
+        .map((json) => NotificationItem.fromJson(json))
+        .toList();
     // Sort by newest first
     _notifications.sort((a, b) => b.createdAt.compareTo(a.createdAt));
     notifyListeners();

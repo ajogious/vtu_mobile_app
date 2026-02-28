@@ -102,7 +102,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
             actions: [
               TextButton(
-                onPressed: isLoading ? null : () => Navigator.pop(context, false),
+                onPressed: isLoading
+                    ? null
+                    : () => Navigator.pop(context, false),
                 child: const Text('Cancel'),
               ),
               ElevatedButton(
@@ -110,17 +112,25 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     ? null
                     : () async {
                         final authProvider = context.read<AuthProvider>();
-                        final username = authProvider.user?.username ?? StorageService().getLastUsername() ?? '';
+                        final username =
+                            authProvider.user?.username ??
+                            StorageService().getLastUsername() ??
+                            '';
                         if (controller.text.isEmpty) {
-                          UiHelpers.showSnackBar(context, 'Password is required', isError: true);
+                          UiHelpers.showSnackBar(
+                            context,
+                            'Password is required',
+                            isError: true,
+                          );
                           return;
                         }
 
                         setDialogState(() => isLoading = true);
-                        
+
                         // We use the raw authService to just check credentials without changing state
-                        final loginResult = await authProvider.authService.login(username, controller.text);
-                        
+                        final loginResult = await authProvider.authService
+                            .login(username, controller.text);
+
                         setDialogState(() => isLoading = false);
 
                         if (loginResult.success) {
@@ -128,7 +138,11 @@ class _SettingsScreenState extends State<SettingsScreen> {
                           if (mounted) Navigator.pop(context, true);
                         } else {
                           if (mounted) {
-                            UiHelpers.showSnackBar(context, 'Incorrect password', isError: true);
+                            UiHelpers.showSnackBar(
+                              context,
+                              'Incorrect password',
+                              isError: true,
+                            );
                           }
                         }
                       },

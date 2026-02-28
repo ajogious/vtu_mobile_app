@@ -16,9 +16,6 @@ import 'providers/notification_provider.dart';
 import 'screens/auth/splash_screen.dart';
 import 'screens/lock/app_lock_screen.dart';
 
-// Switch between mock and real API — set to false for production
-const bool useMockApi = false;
-
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 

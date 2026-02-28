@@ -375,7 +375,7 @@ Need help? Contact us at ${AppConstants.supportEmail}
                       CustomButton(
                         text: 'Withdraw Earnings',
                         icon: Icons.south_west,
-                        onPressed: provider.availableBalance >= 500
+                        onPressed: provider.availableBalance >= 1
                             ? () {
                                 Navigator.push(
                                   context,
@@ -387,10 +387,10 @@ Need help? Contact us at ${AppConstants.supportEmail}
                               }
                             : null,
                       ),
-                      if (provider.availableBalance < 500) ...[
+                      if (provider.availableBalance < 1) ...[
                         const SizedBox(height: 8),
                         Text(
-                          'Minimum withdrawal amount is N500',
+                          'Minimum withdrawal amount is N1',
                           style: TextStyle(
                             color: Colors.grey[600],
                             fontSize: 12,

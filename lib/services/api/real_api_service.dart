@@ -1117,12 +1117,28 @@ class RealApiService implements ApiService {
   }
 
   @override
-  Future<ApiResult<String>> withdrawReferralEarnings({
+  Future<ApiResult<Map<String, dynamic>>> withdrawReferralEarnings({
     required double amount,
     required String pincode,
   }) async {
-    // TODO: Implement when backend provides a dedicated withdrawal endpoint
-    return ApiResult.failure('Referral withdrawal endpoint not yet available');
+    try {
+      final response = await _dio.post(
+        ApiConfig.withdrawCommissionEndpoint,
+        data: {'amount': amount, 'pincode': pincode},
+      );
+
+      final responseData = response.data;
+
+      if (responseData['success'] == true) {
+        return ApiResult.success(responseData['data']);
+      }
+
+      return ApiResult.failure(responseData['message'] ?? 'Withdrawal failed');
+    } on DioException catch (e) {
+      return ApiResult.failure(_handleDioError(e));
+    } catch (e) {
+      return ApiResult.failure(e.toString());
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════

@@ -55,10 +55,7 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
     setState(() => _isLoading = false);
 
     if (result.success) {
-      UiHelpers.showSnackBar(
-        context,
-        result.message ?? 'Password reset successfully',
-      );
+      UiHelpers.showSnackBar(context, result.message);
 
       // Short delay so user sees the success message
       await Future.delayed(const Duration(seconds: 1));

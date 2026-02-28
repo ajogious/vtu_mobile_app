@@ -169,7 +169,7 @@ abstract class ApiService {
 
   Future<ApiResult<List<ReferralEarning>>> getReferralHistory();
 
-  Future<ApiResult<String>> withdrawReferralEarnings({
+  Future<ApiResult<Map<String, dynamic>>> withdrawReferralEarnings({
     required double amount,
     required String pincode,
   });

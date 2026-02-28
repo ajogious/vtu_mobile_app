@@ -50,6 +50,8 @@ class ApiConfig {
 
   // Referral endpoints
   static const String referralHistoryEndpoint = '/referral/history.php';
+  static const String withdrawCommissionEndpoint =
+      '/referral/withdraw_commission.php';
 
   // ATC endpoint
   static const String atcRequestEndpoint = '/airtime_to_cash/request.php';

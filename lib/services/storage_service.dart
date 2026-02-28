@@ -23,7 +23,7 @@ class StorageService {
   static const String _notificationPromotional = 'notification_promotional';
   static const String _biometricEnabled = 'biometric_enabled';
   static const String _autoLockDuration = 'auto_lock_duration';
-  
+
   static const String _tokenExpiryKey = 'token_expiry';
   static const String _securePasswordKey = 'secure_password';
 
@@ -259,7 +259,10 @@ class StorageService {
   // ========== IN-APP NOTIFICATIONS ==========
 
   Future<void> saveNotifications(List<dynamic> notificationsJson) async {
-    await _prefs.setString('in_app_notifications', jsonEncode(notificationsJson));
+    await _prefs.setString(
+      'in_app_notifications',
+      jsonEncode(notificationsJson),
+    );
   }
 
   List<dynamic> getNotifications() {

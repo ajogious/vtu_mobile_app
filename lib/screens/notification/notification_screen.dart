@@ -63,7 +63,10 @@ class NotificationScreen extends StatelessWidget {
   }
 
   Widget _buildNotificationTile(
-      BuildContext context, NotificationItem notification, NotificationProvider provider) {
+    BuildContext context,
+    NotificationItem notification,
+    NotificationProvider provider,
+  ) {
     return Dismissible(
       key: Key(notification.id),
       background: Container(
@@ -75,12 +78,14 @@ class NotificationScreen extends StatelessWidget {
       direction: DismissDirection.endToStart,
       onDismissed: (direction) {
         provider.deleteNotification(notification.id);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Notification removed')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Notification removed')));
       },
       child: Material(
-        color: notification.isRead ? Theme.of(context).scaffoldBackgroundColor : Colors.blue.withOpacity(0.05),
+        color: notification.isRead
+            ? Theme.of(context).scaffoldBackgroundColor
+            : Colors.blue.withOpacity(0.05),
         child: InkWell(
           onTap: () {
             if (!notification.isRead) {
@@ -101,7 +106,9 @@ class NotificationScreen extends StatelessWidget {
                       Text(
                         notification.title,
                         style: TextStyle(
-                          fontWeight: notification.isRead ? FontWeight.normal : FontWeight.bold,
+                          fontWeight: notification.isRead
+                              ? FontWeight.normal
+                              : FontWeight.bold,
                           fontSize: 16,
                         ),
                       ),
@@ -109,17 +116,16 @@ class NotificationScreen extends StatelessWidget {
                       Text(
                         notification.body,
                         style: TextStyle(
-                          color: notification.isRead ? Colors.grey[700] : Colors.black87,
+                          color: notification.isRead
+                              ? Colors.grey[700]
+                              : Colors.black87,
                           fontSize: 14,
                         ),
                       ),
                       const SizedBox(height: 8),
                       Text(
                         _formatDate(notification.createdAt),
-                        style: TextStyle(
-                          color: Colors.grey[500],
-                          fontSize: 12,
-                        ),
+                        style: TextStyle(color: Colors.grey[500], fontSize: 12),
                       ),
                     ],
                   ),
@@ -149,10 +155,14 @@ class NotificationScreen extends StatelessWidget {
     if (t.contains('success') || t.contains('✅')) {
       icon = Icons.check_circle;
       color = Colors.green;
-    } else if (t.contains('fail') || t.contains('❌') || t.contains('rejected')) {
+    } else if (t.contains('fail') ||
+        t.contains('❌') ||
+        t.contains('rejected')) {
       icon = Icons.cancel;
       color = Colors.red;
-    } else if (t.contains('wallet') || t.contains('credited') || t.contains('💰')) {
+    } else if (t.contains('wallet') ||
+        t.contains('credited') ||
+        t.contains('💰')) {
       icon = Icons.account_balance_wallet;
       color = Colors.blue;
     } else if (t.contains('low') || t.contains('⚠️')) {

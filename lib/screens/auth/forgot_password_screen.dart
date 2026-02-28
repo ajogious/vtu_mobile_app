@@ -44,10 +44,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
     setState(() => _isLoading = false);
 
     if (result.success) {
-      UiHelpers.showSnackBar(
-        context,
-        result.message ?? 'OTP sent successfully',
-      );
+      UiHelpers.showSnackBar(context, result.message);
       Navigator.push(
         context,
         MaterialPageRoute(

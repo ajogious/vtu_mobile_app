@@ -9,7 +9,8 @@ class NotificationService {
   static final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
 
-  static final StreamController<void> onNotificationAdded = StreamController<void>.broadcast();
+  static final StreamController<void> onNotificationAdded =
+      StreamController<void>.broadcast();
 
   static bool _initialized = false;
 
@@ -188,7 +189,7 @@ class NotificationService {
       notificationDetails: details,
       payload: payload,
     );
-    
+
     // Save to local storage for in-app display
     final data = storage.getNotifications();
     final newItem = {

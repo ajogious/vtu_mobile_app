@@ -411,7 +411,7 @@ class ReceiptGenerator {
 
       if (Platform.isAndroid) {
         // Request storage permission
-        final status = await Permission.manageExternalStorage.request();
+        await Permission.manageExternalStorage.request();
 
         // Try public Downloads folder
         Directory? downloadsDir;

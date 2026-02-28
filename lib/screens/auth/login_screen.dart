@@ -5,7 +5,6 @@ import '../../services/storage_service.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_textfield.dart';
 import '../widgets/loading_overlay.dart';
-import '../widgets/loading_overlay.dart';
 import '../../utils/ui_helpers.dart';
 import '../../services/biometric_service.dart';
 import '../dashboard/dashboard_screen.dart';
@@ -85,7 +84,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     final storage = StorageService();
     await storage.saveRememberMe(_rememberMe);
-    
+
     // We always need to know who the last user was for Biometrics to work silently.
     await storage.saveLastUsername(_usernameController.text.trim());
 

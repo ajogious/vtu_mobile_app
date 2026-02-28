@@ -12,6 +12,7 @@ import '../widgets/pin_verification_dialog.dart';
 import '../../utils/ui_helpers.dart';
 import '../../models/transaction_model.dart';
 import '../../services/notification_service.dart';
+import '../widgets/loading_overlay.dart';
 
 class WithdrawEarningsScreen extends StatefulWidget {
   const WithdrawEarningsScreen({super.key});
@@ -75,18 +76,30 @@ class _WithdrawEarningsScreenState extends State<WithdrawEarningsScreen> {
 
     // Process withdrawal
     final referralProvider = context.read<ReferralProvider>();
-    final success = await referralProvider.withdrawEarnings(amount);
+    Map<String, dynamic>? result;
+    try {
+      result = await referralProvider.withdrawEarnings(amount, verifiedPin);
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+    }
 
-    if (!mounted) return;
-
-    setState(() {
-      _isProcessing = false;
-    });
-
-    if (success) {
-      // Add to wallet
+    if (result != null) {
+      // Add to wallet safely using specific backend balance
       final walletProvider = context.read<WalletProvider>();
-      walletProvider.addBalance(amount);
+      final previousBalance = walletProvider.balance;
+
+      if (result['wallet_balance'] != null) {
+        walletProvider.setBalance((result['wallet_balance'] as num).toDouble());
+      } else {
+        walletProvider.addBalance(amount);
+      }
+
+      // Fetch the newest referral data without blocking
+      referralProvider.fetchReferralData();
 
       // Create transaction
       final transaction = Transaction(
@@ -97,8 +110,10 @@ class _WithdrawEarningsScreenState extends State<WithdrawEarningsScreen> {
         status: TransactionStatus.success,
         createdAt: DateTime.now(),
         beneficiary: 'Wallet',
-        reference: 'REFWD${DateTime.now().millisecondsSinceEpoch}',
-        balanceBefore: walletProvider.balance - amount,
+        reference:
+            result['reference'] ??
+            'REFWD${DateTime.now().millisecondsSinceEpoch}',
+        balanceBefore: previousBalance,
         balanceAfter: walletProvider.balance,
         metadata: {'type': 'withdrawal', 'source': 'referral_earnings'},
       );
@@ -118,11 +133,9 @@ class _WithdrawEarningsScreenState extends State<WithdrawEarningsScreen> {
 
       Navigator.pop(context);
     } else {
-      UiHelpers.showSnackBar(
-        context,
-        'Withdrawal failed. Please try again.',
-        isError: true,
-      );
+      final errorMessage =
+          referralProvider.error ?? 'Withdrawal failed. Please try again.';
+      UiHelpers.showSnackBar(context, errorMessage, isError: true);
     }
   }
 
@@ -135,138 +148,146 @@ class _WithdrawEarningsScreenState extends State<WithdrawEarningsScreen> {
           title: const Text('Withdraw Earnings'),
           centerTitle: true,
         ),
-        body: Consumer<ReferralProvider>(
-          builder: (context, provider, child) {
-            return SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Form(
-                key: _formKey,
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // Available Balance Card
-                    Container(
-                      padding: const EdgeInsets.all(20),
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                          colors: [Colors.green, Colors.green.withOpacity(0.8)],
+        body: LoadingOverlay(
+          isLoading: _isProcessing,
+          child: Consumer<ReferralProvider>(
+            builder: (context, provider, child) {
+              return SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Form(
+                  key: _formKey,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Available Balance Card
+                      Container(
+                        padding: const EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [
+                              Colors.green,
+                              Colors.green.withOpacity(0.8),
+                            ],
+                          ),
+                          borderRadius: BorderRadius.circular(16),
                         ),
-                        borderRadius: BorderRadius.circular(16),
+                        child: Column(
+                          children: [
+                            const Text(
+                              'Available Balance',
+                              style: TextStyle(
+                                color: Colors.white70,
+                                fontSize: 14,
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '₦${NumberFormat('#,##0.00').format(provider.availableBalance)}',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 36,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                      child: Column(
-                        children: [
-                          const Text(
-                            'Available Balance',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 14,
-                            ),
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            '₦${NumberFormat('#,##0.00').format(provider.availableBalance)}',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 36,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
+                      const SizedBox(height: 24),
+
+                      // Amount Input
+                      CustomTextField(
+                        controller: _amountController,
+                        labelText: 'Amount to Withdraw',
+                        hintText: 'Enter amount',
+                        prefixIcon: Icons.money,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [
+                          FilteringTextInputFormatter.digitsOnly,
                         ],
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter amount';
+                          }
+                          final amount = double.tryParse(value.trim());
+                          if (amount == null) {
+                            return 'Please enter a valid amount';
+                          }
+                          if (amount < 1) {
+                            return 'Minimum withdrawal is ₦1';
+                          }
+                          if (amount > provider.availableBalance) {
+                            return 'Amount exceeds available balance';
+                          }
+                          return null;
+                        },
+                        suffixIcon: TextButton(
+                          onPressed: _setMaxAmount,
+                          child: const Text('MAX'),
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 24),
+                      const SizedBox(height: 16),
 
-                    // Amount Input
-                    CustomTextField(
-                      controller: _amountController,
-                      labelText: 'Amount to Withdraw',
-                      hintText: 'Enter amount',
-                      prefixIcon: Icons.money,
-                      keyboardType: TextInputType.number,
-                      inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                      validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return 'Please enter amount';
-                        }
-                        final amount = double.tryParse(value.trim());
-                        if (amount == null) {
-                          return 'Please enter a valid amount';
-                        }
-                        if (amount < 500) {
-                          return 'Minimum withdrawal is ₦500';
-                        }
-                        if (amount > provider.availableBalance) {
-                          return 'Amount exceeds available balance';
-                        }
-                        return null;
-                      },
-                      suffixIcon: TextButton(
-                        onPressed: _setMaxAmount,
-                        child: const Text('MAX'),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-
-                    // Info
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.blue[50],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Icon(
-                            Icons.info_outline,
-                            color: Colors.blue[700],
-                            size: 20,
-                          ),
-                          const SizedBox(width: 12),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  'Withdrawal Info',
-                                  style: TextStyle(
-                                    color: Colors.blue[900],
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  '• Minimum withdrawal: ₦500\n'
-                                  '• Funds transferred instantly to wallet\n'
-                                  '• No withdrawal fees',
-                                  style: TextStyle(
-                                    color: Colors.blue[800],
-                                    fontSize: 12,
-                                  ),
-                                ),
-                              ],
+                      // Info
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.blue[50],
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Icon(
+                              Icons.info_outline,
+                              color: Colors.blue[700],
+                              size: 20,
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Withdrawal Info',
+                                    style: TextStyle(
+                                      color: Colors.blue[900],
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '• Minimum withdrawal: ₦1\n'
+                                    '• Funds transferred instantly to wallet\n'
+                                    '• No withdrawal fees',
+                                    style: TextStyle(
+                                      color: Colors.blue[800],
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                    const SizedBox(height: 32),
+                      const SizedBox(height: 32),
 
-                    // Withdraw Button
-                    CustomButton(
-                      text: 'Withdraw to Wallet',
-                      icon: Icons.south_west,
-                      onPressed: _withdraw,
-                      isLoading: _isProcessing,
-                    ),
-                  ],
+                      // Withdraw Button
+                      CustomButton(
+                        text: 'Withdraw to Wallet',
+                        icon: Icons.south_west,
+                        onPressed: _withdraw,
+                        isLoading: _isProcessing,
+                      ),
+                    ],
+                  ),
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );

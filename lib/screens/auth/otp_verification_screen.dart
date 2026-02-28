@@ -69,10 +69,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     setState(() => _isLoading = false);
 
     if (result.success) {
-      UiHelpers.showSnackBar(
-        context,
-        result.message ?? 'OTP verified successfully',
-      );
+      UiHelpers.showSnackBar(context, result.message);
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -98,10 +95,7 @@ class _OtpVerificationScreenState extends State<OtpVerificationScreen> {
     setState(() => _isLoading = false);
 
     if (result.success) {
-      UiHelpers.showSnackBar(
-        context,
-        result.message ?? 'OTP resent successfully',
-      );
+      UiHelpers.showSnackBar(context, result.message);
       _startTimer();
     } else {
       UiHelpers.showSnackBar(
