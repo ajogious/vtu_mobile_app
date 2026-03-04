@@ -61,7 +61,13 @@ class MyApp extends StatelessWidget {
             return referralProvider;
           },
         ),
-        ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProxyProvider<AuthProvider, NotificationProvider>(
+          create: (_) => NotificationProvider(),
+          update: (_, authProvider, notificationProvider) {
+            notificationProvider!.setAuthProvider(authProvider);
+            return notificationProvider;
+          },
+        ),
       ],
       child: const VTUApp(),
     );
@@ -128,27 +134,37 @@ class _VTUAppState extends State<VTUApp> with WidgetsBindingObserver {
           darkTheme: ThemeConfig.darkTheme,
           themeMode: themeProvider.themeMode,
           builder: (context, child) {
-            return Consumer<AppLockProvider>(
-              builder: (context, lockProvider, _) {
-                return Stack(
-                  children: [
-                    if (child != null) child,
-                    if (lockProvider.isLocked)
-                      Positioned.fill(
-                        child: AppLockScreen(
-                          onUnlocked: () {
-                            lockProvider.unlock();
-                          },
-                        ),
-                      ),
-                  ],
-                );
-              },
+            return Stack(
+              children: [
+                if (child != null) child,
+                // FIX: extracted into its own widget so AppLockScreen
+                // is never rebuilt while the user is typing
+                _AppLockOverlay(),
+              ],
             );
           },
           home: const SplashScreen(),
         );
       },
+    );
+  }
+}
+
+/// Separate widget so Consumer<AppLockProvider> rebuilds only this,
+/// never AppLockScreen itself while the user is typing their password.
+class _AppLockOverlay extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final isLocked = context.select<AppLockProvider, bool>((p) => p.isLocked);
+
+    if (!isLocked) return const SizedBox.shrink();
+
+    return Positioned.fill(
+      child: AppLockScreen(
+        onUnlocked: () {
+          context.read<AppLockProvider>().unlock();
+        },
+      ),
     );
   }
 }

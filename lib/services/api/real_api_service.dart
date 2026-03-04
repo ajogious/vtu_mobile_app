@@ -406,17 +406,84 @@ class RealApiService implements ApiService {
     }
   }
 
+  /// Hacks `/user/change-pin.php` to verify a PIN by trying to change it to itself.
+  /// If the API says "Incorrect old PIN" (usually ok == false), it fails.
+  /// If it says "Success" or any message about the NEW pin (which proves the OLD pin
+  /// was correct), it passes.
+  Future<ApiResult<bool>> verifyPinAPI({required String pin}) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.changePinEndpoint,
+        data: {'old_pin': pin, 'new_pin': pin},
+      );
+      final responseData = response.data;
+      final msg = (responseData['message'] ?? '').toString().toLowerCase();
+
+      // If it changed successfully, the PIN was obviously correct.
+      if (responseData['ok'] == true) {
+        return ApiResult.success(true);
+      }
+
+      // Any message about the NEW pin (not the old one) proves the old PIN was
+      // accepted. The API might say any of:
+      //   "New PIN cannot be the same as old PIN"
+      //   "New PIN does not match"
+      //   "New pin does not match confirm pin"
+      //   "New password does not match"
+      //   etc.
+      if (msg.contains('new pin') ||
+          msg.contains('new password') ||
+          msg.contains('same') ||
+          msg.contains('cannot be') ||
+          msg.contains('confirm')) {
+        return ApiResult.success(true);
+      }
+
+      // Otherwise, likely "Incorrect old PIN" — the PIN was wrong.
+      return ApiResult.failure('Incorrect PIN. Please try again.');
+    } on DioException catch (e) {
+      return ApiResult.failure(_handleDioError(e));
+    } catch (e) {
+      return ApiResult.failure(e.toString());
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // KYC & WALLET
   // ═══════════════════════════════════════════════════════════════════════════
 
   @override
   Future<ApiResult<List<VirtualAccount>>> verifyKyc({
-    required String type,
-    required String value,
+    required String type, // 'bvn' or 'nin'
+    required String value, // the 11-digit BVN or NIN
+    required String pincode,
   }) async {
-    // TODO: Implement when backend provides endpoint
-    return ApiResult.failure('KYC verification endpoint not yet available');
+    try {
+      final Map<String, dynamic> body = {
+        'pincode': pincode,
+        'bvn': '',
+        'nin': '',
+      };
+      body[type] = value;
+
+      final response = await _dio.post(ApiConfig.kycVerifyEndpoint, data: body);
+
+      final responseData = response.data;
+
+      if (responseData['ok'] == true) {
+        final data = responseData['data'] as Map<String, dynamic>? ?? {};
+        final accounts = VirtualAccount.fromApiData(data);
+        return ApiResult.success(accounts);
+      }
+
+      return ApiResult.failure(
+        responseData['message']?.toString() ?? 'KYC verification failed',
+      );
+    } on DioException catch (e) {
+      return ApiResult.failure(_handleDioError(e));
+    } catch (e) {
+      return ApiResult.failure(e.toString());
+    }
   }
 
   @override
@@ -434,8 +501,57 @@ class RealApiService implements ApiService {
 
   @override
   Future<ApiResult<List<VirtualAccount>>> getVirtualAccounts() async {
-    // TODO: Implement when backend provides endpoint
-    return ApiResult.failure('Virtual accounts endpoint not yet available');
+    // Read the user from local storage — account numbers (wema_account,
+    // moniepoint_account, sterling_account) are returned in the login response
+    // and saved there. The profile endpoint (/user/me.php) does NOT return them,
+    // so we must NOT call getMe() here.
+    final user = _storage.getUser();
+
+    if (user == null) {
+      return ApiResult.failure('User not logged in');
+    }
+
+    final accountName = user.fullName;
+    final accounts = <VirtualAccount>[];
+
+    if (user.wemaAccount != null && user.wemaAccount!.isNotEmpty) {
+      accounts.add(
+        VirtualAccount(
+          bankName: 'Wema Bank',
+          accountNumber: user.wemaAccount!,
+          accountName: accountName,
+          reference: '',
+        ),
+      );
+    }
+
+    if (user.moniepointAccount != null && user.moniepointAccount!.isNotEmpty) {
+      accounts.add(
+        VirtualAccount(
+          bankName: 'Moniepoint MFB',
+          accountNumber: user.moniepointAccount!,
+          accountName: accountName,
+          reference: '',
+        ),
+      );
+    }
+
+    if (user.sterlingAccount != null && user.sterlingAccount!.isNotEmpty) {
+      accounts.add(
+        VirtualAccount(
+          bankName: 'Sterling Bank',
+          accountNumber: user.sterlingAccount!,
+          accountName: accountName,
+          reference: '',
+        ),
+      );
+    }
+
+    if (accounts.isEmpty) {
+      return ApiResult.failure('No virtual accounts found');
+    }
+
+    return ApiResult.success(accounts);
   }
 
   @override
@@ -1245,9 +1361,12 @@ class _ErrorInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
     // Handle 401 globally (token expired)
-    if (err.response?.statusCode == 401) {
+    // Exclude the login endpoint because 401 there just means wrong credentials
+    if (err.response?.statusCode == 401 &&
+        !(err.requestOptions.path.contains('login'))) {
       // Token expired - trigger logout
       // This will be caught by the error handler in the API methods
+      ApiService.onUnauthenticated.add(null);
     }
 
     super.onError(err, handler);

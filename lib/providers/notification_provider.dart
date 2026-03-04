@@ -93,4 +93,11 @@ class NotificationProvider with ChangeNotifier {
     _notifications.clear();
     await _saveNotifications();
   }
+
+  void setAuthProvider(dynamic authProvider) {
+    if (!authProvider.isAuthenticated && _notifications.isNotEmpty) {
+      _notifications.clear();
+      notifyListeners();
+    }
+  }
 }

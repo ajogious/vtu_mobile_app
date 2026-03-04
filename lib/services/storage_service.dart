@@ -283,13 +283,20 @@ class StorageService {
     await _prefs.clear();
   }
 
-  // Clear only auth data (keep preferences)
+  // Clear only auth data (keep device preferences)
   Future<void> clearAuth() async {
-    await deleteToken();
-    await deleteTokenExpiry();
-    if (!getBiometricEnabled()) {
-      await deletePassword();
+    // Preserve settings that are device-specific and shouldn't reset on logout
+    bool isDark = getThemeMode();
+    bool isFirst = isFirstLaunch();
+
+    // Wipe absolutely everything else
+    if (!kIsWeb && _secureStorage != null) {
+      await _secureStorage!.deleteAll();
     }
-    await _prefs.remove('user');
+    await _prefs.clear();
+
+    // Restore device settings
+    await saveThemeMode(isDark);
+    await setFirstLaunch(isFirst);
   }
 }

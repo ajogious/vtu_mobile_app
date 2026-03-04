@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../services/api/real_api_service.dart';
 import '../../services/biometric_service.dart';
 import '../../services/storage_service.dart';
 import '../../utils/ui_helpers.dart';
@@ -51,6 +52,11 @@ class _PinVerificationDialogState extends State<PinVerificationDialog> {
 
     final canAuth = await BiometricService.canAuthenticate();
     if (!canAuth) return;
+
+    // Check if we actually have the PIN saved locally.
+    // Otherwise we'd authorize via biometrics but submit an empty PIN.
+    final hasLocalPin = await StorageService().hasPin();
+    if (!hasLocalPin) return;
 
     final label = await BiometricService.getBiometricLabel();
     final icon = await BiometricService.getBiometricIcon();
@@ -150,12 +156,30 @@ class _PinVerificationDialogState extends State<PinVerificationDialog> {
       }
     } else {
       // No local PIN — user set PIN on server but not cached locally.
-      // Return the entered PIN and let the API validate it.
-      // If wrong, the buy API will return an error which the screen handles.
+      // E.g., fresh login trying to enable biometrics.
+      // Fallback to our change-pin hack to verify against the server!
+
+      // Need to grab the actual API service. We can safely reinstantiate it since it has no state.
+      final api = RealApiService();
+      final result = await api.verifyPinAPI(pin: pin);
+
       setState(() {
         _isLoading = false;
       });
-      Navigator.pop(context, pin);
+
+      if (result.success && result.data == true) {
+        // Cache the PIN locally so future verifications are instant
+        // and don't depend on the API hack again.
+        await storage.savePin(pin);
+        if (!mounted) return;
+        Navigator.pop(context, pin);
+      } else {
+        setState(() {
+          _errorMessage = result.error ?? 'Incorrect PIN. Please try again.';
+          _pinController.clear();
+        });
+        _focusNode.requestFocus();
+      }
     }
   }
 

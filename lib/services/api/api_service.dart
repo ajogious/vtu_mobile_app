@@ -1,3 +1,4 @@
+import 'dart:async';
 import '../../config/api_result.dart';
 import '../../models/airtime_network_model.dart';
 import '../../models/atc_request_model.dart';
@@ -9,6 +10,8 @@ import '../../models/user_model.dart';
 import '../../models/virtual_account_model.dart';
 
 abstract class ApiService {
+  static final StreamController<void> onUnauthenticated = StreamController<void>.broadcast();
+
   // ========== AUTHENTICATION ==========
 
   Future<ApiResult<Map<String, dynamic>>> register({
@@ -69,8 +72,9 @@ abstract class ApiService {
   // ========== KYC & WALLET ==========
 
   Future<ApiResult<List<VirtualAccount>>> verifyKyc({
-    required String type, // 'bvn' or 'nin'
+    required String type,
     required String value,
+    required String pincode,
   });
 
   Future<ApiResult<double>> getWalletBalance();

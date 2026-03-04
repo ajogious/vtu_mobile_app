@@ -20,6 +20,9 @@ class ApiConfig {
   static const String resetPasswordEndpoint = '/auth/reset-password.php';
   static const notificationsEndpoint = '/user/get-notice.php';
 
+  // kys endpoint
+  static const String kycVerifyEndpoint = '/user/kyc_verify.php';
+
   // User endpoints
   static const String userProfileEndpoint = '/user/me.php';
   static const String logoutEndpoint = '/user/logout.php';

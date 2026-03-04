@@ -14,6 +14,9 @@ class User {
   final String level;
   final DateTime? createdAt;
   final bool pinSet;
+  final String? wemaAccount;
+  final String? moniepointAccount;
+  final String? sterlingAccount;
 
   User({
     required this.id,
@@ -31,6 +34,9 @@ class User {
     this.level = 'free',
     this.createdAt,
     this.pinSet = false,
+    this.wemaAccount,
+    this.moniepointAccount,
+    this.sterlingAccount,
   });
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -66,6 +72,11 @@ class User {
 
       // ⚠️ Parse "YES"/"NO" from pin_set
       pinSet: _parseBool(json['pin_set']),
+
+      // Virtual bank account numbers from login response
+      wemaAccount: json['wema_account']?.toString(),
+      moniepointAccount: json['moniepoint_account']?.toString(),
+      sterlingAccount: json['sterling_account']?.toString(),
     );
   }
 
@@ -103,6 +114,9 @@ class User {
       'level': level,
       'created_at': createdAt?.toIso8601String(),
       'pin_set': pinSet ? 'YES' : 'NO',
+      'wema_account': wemaAccount,
+      'moniepoint_account': moniepointAccount,
+      'sterling_account': sterlingAccount,
     };
   }
 
@@ -124,6 +138,9 @@ class User {
     String? level,
     DateTime? createdAt,
     bool? pinSet,
+    String? wemaAccount,
+    String? moniepointAccount,
+    String? sterlingAccount,
   }) {
     return User(
       id: id ?? this.id,
@@ -141,6 +158,9 @@ class User {
       level: level ?? this.level,
       createdAt: createdAt ?? this.createdAt,
       pinSet: pinSet ?? this.pinSet,
+      wemaAccount: wemaAccount ?? this.wemaAccount,
+      moniepointAccount: moniepointAccount ?? this.moniepointAccount,
+      sterlingAccount: sterlingAccount ?? this.sterlingAccount,
     );
   }
 }

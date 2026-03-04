@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 
 import '../../services/biometric_service.dart';
 import '../../services/storage_service.dart';
 import '../../utils/ui_helpers.dart';
+import '../widgets/custom_textfield.dart';
 
 class AppLockScreen extends StatefulWidget {
   final VoidCallback onUnlocked;
@@ -235,31 +235,14 @@ class _AppLockScreenState extends State<AppLockScreen> {
 
                   // PIN Input
                   if (!_isLoading) ...[
-                    TextField(
+                    CustomTextField(
                       controller: _passwordController,
                       obscureText: true,
-                      enableInteractiveSelection: false,
-                      textAlign: TextAlign.center,
-                      autofocus: !_biometricAvailable,
+                      showPasswordToggle: true,
+                      keyboardType: TextInputType.visiblePassword,
                       enabled: !_isLocked,
-                      decoration: InputDecoration(
-                        counterText: '',
-                        hintText: '••••••••',
-                        hintStyle: TextStyle(
-                          color: Colors.grey[400],
-                          fontSize: 24,
-                          letterSpacing: 8,
-                        ),
-                        errorText: _errorMessage.isNotEmpty
-                            ? _errorMessage
-                            : null,
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        fillColor: _isLocked ? Colors.grey[200] : null,
-                        filled: _isLocked,
-                      ),
-                      style: const TextStyle(fontSize: 24, letterSpacing: 8),
+                      hintText: 'Password',
+                      prefixIcon: Icons.lock,
                       onSubmitted: (_) => _verifyPassword(),
                       onChanged: (value) {
                         if (_errorMessage.isNotEmpty && !_isLocked) {
@@ -269,6 +252,20 @@ class _AppLockScreenState extends State<AppLockScreen> {
                         }
                       },
                     ),
+                    if (_errorMessage.isNotEmpty)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 8.0, left: 16.0),
+                        child: Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            _errorMessage,
+                            style: TextStyle(
+                              color: Theme.of(context).colorScheme.error,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
                     const SizedBox(height: 24),
 
                     if (!_isLocked)

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/user_model.dart';
+import '../services/api/api_service.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
 import '../services/biometric_service.dart';
@@ -22,6 +23,13 @@ class AuthProvider extends ChangeNotifier {
 
   AuthProvider(this._appLockProvider) {
     _loadUser();
+
+    // Listen for unauthorized events globally
+    ApiService.onUnauthenticated.stream.listen((_) {
+      if (_user != null && !_isLoading) {
+        logout();
+      }
+    });
   }
 
   // Load user from storage on startup
@@ -188,7 +196,18 @@ class AuthProvider extends ChangeNotifier {
     try {
       final result = await _authService.api.getMe();
       if (result.success && result.data != null) {
-        _user = result.data;
+        // The profile endpoint does NOT return bank account numbers or always
+        // return pin_set — only the login response does. Preserve those fields
+        // from the current user so refreshUser() doesn't wipe them.
+        final fresh = result.data!;
+        _user = fresh.copyWith(
+          wemaAccount: fresh.wemaAccount ?? _user?.wemaAccount,
+          moniepointAccount:
+              fresh.moniepointAccount ?? _user?.moniepointAccount,
+          sterlingAccount: fresh.sterlingAccount ?? _user?.sterlingAccount,
+          // Preserve pinSet — if profile API doesn't return it, keep existing
+          pinSet: fresh.pinSet || (_user?.pinSet ?? false),
+        );
         await _storage.saveUser(_user!);
         notifyListeners();
         return true;

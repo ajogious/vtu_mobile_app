@@ -1,10 +1,12 @@
+// ignore_for_file: use_build_context_synchronously
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_textfield.dart';
-// import '../../utils/validators.dart';
+import '../widgets/pin_verification_dialog.dart';
 import '../../utils/ui_helpers.dart';
 import '../../models/virtual_account_model.dart';
 
@@ -20,7 +22,8 @@ class KycScreen extends StatefulWidget {
 class _KycScreenState extends State<KycScreen> {
   final _formKey = GlobalKey<FormState>();
   final _numberController = TextEditingController();
-  KycType _selectedType = KycType.bvn;
+
+  KycType _selectedType = KycType.nin; // NIN is more common — default to it
   bool _isLoading = false;
   List<VirtualAccount> _virtualAccounts = [];
   bool _verificationSuccessful = false;
@@ -35,27 +38,13 @@ class _KycScreenState extends State<KycScreen> {
     if (value == null || value.trim().isEmpty) {
       return 'Please enter your ${_selectedType == KycType.bvn ? "BVN" : "NIN"}';
     }
-
     final cleaned = value.replaceAll(RegExp(r'[\s\-]'), '');
-
-    if (_selectedType == KycType.bvn) {
-      // BVN is 11 digits
-      if (cleaned.length != 11) {
-        return 'BVN must be 11 digits';
-      }
-      if (!RegExp(r'^\d{11}$').hasMatch(cleaned)) {
-        return 'BVN must contain only numbers';
-      }
-    } else {
-      // NIN is 11 digits
-      if (cleaned.length != 11) {
-        return 'NIN must be 11 digits';
-      }
-      if (!RegExp(r'^\d{11}$').hasMatch(cleaned)) {
-        return 'NIN must contain only numbers';
-      }
+    if (cleaned.length != 11) {
+      return '${_selectedType == KycType.bvn ? "BVN" : "NIN"} must be 11 digits';
     }
-
+    if (!RegExp(r'^\d{11}$').hasMatch(cleaned)) {
+      return '${_selectedType == KycType.bvn ? "BVN" : "NIN"} must contain only numbers';
+    }
     return null;
   }
 
@@ -64,36 +53,49 @@ class _KycScreenState extends State<KycScreen> {
 
     if (!_formKey.currentState!.validate()) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    // ── PIN VERIFICATION ───────────────────────────────────────────────────
+    final serverPinSet = context.read<AuthProvider>().user?.pinSet == true;
+
+    final verifiedPin = await showPinVerificationDialog(
+      context,
+      title: 'Confirm KYC',
+      subtitle: 'Enter your PIN to verify your identity',
+      serverPinSet: serverPinSet,
+    );
+
+    if (verifiedPin == null) {
+      // User cancelled PIN dialog
+      UiHelpers.showSnackBar(context, 'Verification cancelled', isError: true);
+      return;
+    }
+    // ──────────────────────────────────────────────────────────────────────
+
+    setState(() => _isLoading = true);
 
     final authProvider = context.read<AuthProvider>();
+
     final result = await authProvider.authService.api.verifyKyc(
       type: _selectedType == KycType.bvn ? 'bvn' : 'nin',
       value: _numberController.text.trim(),
+      pincode: verifiedPin,
     );
 
     if (!mounted) return;
-
-    setState(() {
-      _isLoading = false;
-    });
+    setState(() => _isLoading = false);
 
     if (result.success && result.data != null) {
-      setState(() {
-        _virtualAccounts = result.data!;
-        _verificationSuccessful = true;
-      });
-
-      // IMPORTANT: Update user KYC status in provider AND storage
+      // Update the user's KYC status in provider and local storage
       if (authProvider.user != null) {
         final updatedUser = authProvider.user!.copyWith(kycVerified: true);
         await authProvider.updateUser(updatedUser);
       }
 
-      // ignore: use_build_context_synchronously
-      UiHelpers.showSnackBar(context, result.message);
+      setState(() {
+        _virtualAccounts = result.data!;
+        _verificationSuccessful = true;
+      });
+
+      UiHelpers.showSnackBar(context, 'KYC verified successfully');
     } else {
       UiHelpers.showSnackBar(
         context,
@@ -103,13 +105,8 @@ class _KycScreenState extends State<KycScreen> {
     }
   }
 
-  void _skip() {
-    Navigator.pop(context, false);
-  }
-
-  void _done() {
-    Navigator.pop(context, true);
-  }
+  void _done() => Navigator.pop(context, true);
+  void _skip() => Navigator.pop(context, false);
 
   @override
   Widget build(BuildContext context) {
@@ -133,6 +130,8 @@ class _KycScreenState extends State<KycScreen> {
     );
   }
 
+  // ── FORM ──────────────────────────────────────────────────────────────────
+
   Widget _buildVerificationForm() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -141,7 +140,7 @@ class _KycScreenState extends State<KycScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            // Icon
+            // Hero icon
             Icon(
               Icons.verified_user,
               size: 80,
@@ -149,7 +148,6 @@ class _KycScreenState extends State<KycScreen> {
             ),
             const SizedBox(height: 24),
 
-            // Title
             Text(
               'Verify Your Identity',
               style: Theme.of(
@@ -159,9 +157,9 @@ class _KycScreenState extends State<KycScreen> {
             ),
             const SizedBox(height: 8),
 
-            // Description
             Text(
-              'Complete KYC verification to get dedicated virtual bank accounts for instant wallet funding',
+              'Complete KYC verification to get dedicated virtual bank '
+              'accounts for instant wallet funding',
               style: Theme.of(
                 context,
               ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
@@ -169,7 +167,7 @@ class _KycScreenState extends State<KycScreen> {
             ),
             const SizedBox(height: 40),
 
-            // KYC Type Selection
+            // ── KYC type selector ──────────────────────────────────────────
             Text(
               'Select Verification Method',
               style: Theme.of(
@@ -178,55 +176,20 @@ class _KycScreenState extends State<KycScreen> {
             ),
             const SizedBox(height: 16),
 
-            // BVN Radio
-            RadioListTile<KycType>(
-              value: KycType.bvn,
-              groupValue: _selectedType,
-              onChanged: (value) {
-                setState(() {
-                  _selectedType = value!;
-                  _numberController.clear();
-                });
-              },
-              title: const Text('Bank Verification Number (BVN)'),
-              subtitle: const Text('11-digit BVN'),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                  color: _selectedType == KycType.bvn
-                      ? Theme.of(context).primaryColor
-                      : Colors.grey[300]!,
-                  width: 2,
-                ),
-              ),
+            _buildTypeOption(
+              type: KycType.nin,
+              title: 'National Identity Number (NIN)',
+              subtitle: '11-digit NIN',
             ),
             const SizedBox(height: 12),
-
-            // NIN Radio
-            RadioListTile<KycType>(
-              value: KycType.nin,
-              groupValue: _selectedType,
-              onChanged: (value) {
-                setState(() {
-                  _selectedType = value!;
-                  _numberController.clear();
-                });
-              },
-              title: const Text('National Identity Number (NIN)'),
-              subtitle: const Text('11-digit NIN'),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(
-                  color: _selectedType == KycType.nin
-                      ? Theme.of(context).primaryColor
-                      : Colors.grey[300]!,
-                  width: 2,
-                ),
-              ),
+            _buildTypeOption(
+              type: KycType.bvn,
+              title: 'Bank Verification Number (BVN)',
+              subtitle: '11-digit BVN',
             ),
             const SizedBox(height: 24),
 
-            // Number Input
+            // ── Number input ───────────────────────────────────────────────
             CustomTextField(
               controller: _numberController,
               labelText: _selectedType == KycType.bvn ? 'BVN' : 'NIN',
@@ -242,7 +205,7 @@ class _KycScreenState extends State<KycScreen> {
             ),
             const SizedBox(height: 32),
 
-            // Submit Button
+            // ── Submit ─────────────────────────────────────────────────────
             CustomButton(
               text: 'Verify',
               onPressed: _submitKyc,
@@ -250,7 +213,7 @@ class _KycScreenState extends State<KycScreen> {
             ),
             const SizedBox(height: 16),
 
-            // Info Note
+            // ── Security note ──────────────────────────────────────────────
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
@@ -264,7 +227,8 @@ class _KycScreenState extends State<KycScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      'Your information is secure and will only be used for account verification purposes.',
+                      'Your information is secure and will only be used '
+                      'for account verification purposes.',
                       style: TextStyle(color: Colors.blue[900], fontSize: 12),
                     ),
                   ),
@@ -277,24 +241,60 @@ class _KycScreenState extends State<KycScreen> {
     );
   }
 
+  Widget _buildTypeOption({
+    required KycType type,
+    required String title,
+    required String subtitle,
+  }) {
+    final isSelected = _selectedType == type;
+    return RadioListTile<KycType>(
+      value: type,
+      groupValue: _selectedType,
+      onChanged: (value) {
+        setState(() {
+          _selectedType = value!;
+          _numberController.clear();
+        });
+      },
+      title: Text(title),
+      subtitle: Text(subtitle),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(
+          color: isSelected
+              ? Theme.of(context).primaryColor
+              : Colors.grey[300]!,
+          width: 2,
+        ),
+      ),
+    );
+  }
+
+  // ── SUCCESS VIEW ──────────────────────────────────────────────────────────
+
   Widget _buildSuccessView() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // Success Icon
-          Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: Colors.green[50],
-              shape: BoxShape.circle,
+          // Success icon
+          Center(
+            child: Container(
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: Colors.green[50],
+                shape: BoxShape.circle,
+              ),
+              child: Icon(
+                Icons.check_circle,
+                size: 80,
+                color: Colors.green[600],
+              ),
             ),
-            child: Icon(Icons.check_circle, size: 80, color: Colors.green[600]),
           ),
           const SizedBox(height: 24),
 
-          // Success Message
           Text(
             'Verification Successful!',
             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
@@ -304,8 +304,10 @@ class _KycScreenState extends State<KycScreen> {
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 8),
+
           Text(
-            'Your virtual bank accounts have been created',
+            'Your virtual bank accounts have been created.\n'
+            'Transfer any amount to fund your wallet instantly.',
             style: Theme.of(
               context,
             ).textTheme.bodyLarge?.copyWith(color: Colors.grey[600]),
@@ -313,7 +315,6 @@ class _KycScreenState extends State<KycScreen> {
           ),
           const SizedBox(height: 40),
 
-          // Virtual Accounts
           Text(
             'Your Virtual Accounts',
             style: Theme.of(
@@ -322,69 +323,74 @@ class _KycScreenState extends State<KycScreen> {
           ),
           const SizedBox(height: 16),
 
-          ..._virtualAccounts.map(
-            (account) => Card(
-              margin: const EdgeInsets.only(bottom: 12),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      account.bankName,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      account.accountName,
-                      style: TextStyle(color: Colors.grey[600], fontSize: 14),
-                    ),
-                    const SizedBox(height: 8),
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: Colors.grey[100],
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            account.accountNumber,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                              letterSpacing: 1.5,
-                            ),
-                          ),
-                          IconButton(
-                            icon: const Icon(Icons.copy, size: 20),
-                            onPressed: () {
-                              Clipboard.setData(
-                                ClipboardData(text: account.accountNumber),
-                              );
-                              UiHelpers.showSnackBar(
-                                context,
-                                'Account number copied',
-                              );
-                            },
-                          ),
-                        ],
-                      ),
-                    ),
-                  ],
+          ..._virtualAccounts.map((account) => _buildAccountCard(account)),
+          const SizedBox(height: 32),
+
+          CustomButton(text: 'Done', onPressed: _done),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAccountCard(VirtualAccount account) {
+    return Card(
+      margin: const EdgeInsets.only(bottom: 12),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Bank name + copy button row
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  account.bankName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 16,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.copy, size: 20),
+                  tooltip: 'Copy account number',
+                  onPressed: () {
+                    Clipboard.setData(
+                      ClipboardData(text: account.accountNumber),
+                    );
+                    UiHelpers.showSnackBar(context, 'Account number copied');
+                  },
+                ),
+              ],
+            ),
+
+            // Account name
+            Text(
+              account.accountName,
+              style: TextStyle(color: Colors.grey[600], fontSize: 13),
+            ),
+            const SizedBox(height: 10),
+
+            // Account number pill
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+              decoration: BoxDecoration(
+                color: Colors.grey[100],
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                account.accountNumber,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 20,
+                  letterSpacing: 2,
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 32),
-
-          // Done Button
-          CustomButton(text: 'Done', onPressed: _done),
-        ],
+          ],
+        ),
       ),
     );
   }

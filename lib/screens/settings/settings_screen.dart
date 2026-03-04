@@ -12,6 +12,7 @@ import '../beneficiaries/beneficiary_management_screen.dart';
 import 'change_password_screen.dart';
 import 'change_pin_screen.dart';
 import '../auth/login_screen.dart';
+import '../widgets/pin_verification_dialog.dart';
 import '../widgets/custom_textfield.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -52,14 +53,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _toggleBiometric(bool value) async {
     final storage = StorageService();
 
+    // 1. the user must verify their transaction PIN first to toggle biometrics at all
+    final pin = await showPinVerificationDialog(
+      context,
+      title: 'Security Check',
+      subtitle: 'Enter your transaction PIN to ${value ? 'enable' : 'disable'} biometrics',
+      allowBiometric: false, // Must use PIN to verify
+      // Use user.pinSet from the server, but default to false if null
+      serverPinSet: context.read<AuthProvider>().user?.pinSet == 'YES' || context.read<AuthProvider>().user?.pinSet == true, 
+    );
+    
+    if (pin == null) return; // Cancelled or failed PIN
+
+    // 2. We need them to enter their password to confirm identity
+    final success = await _promptForPasswordToEnableBiometrics();
+    if (!success) return;
+
     if (value) {
       // Trying to enable
-      final hasPassword = (await storage.getPassword()) != null;
-      if (!hasPassword) {
-        // We need them to enter their password to cache it
-        final success = await _promptForPasswordToEnableBiometrics();
-        if (!success) return;
-      }
+      // Save the PIN locally so transaction biometrics works immediately after
+      await storage.savePin(pin);
     } else {
       // Trying to disable
       await storage.deletePassword();

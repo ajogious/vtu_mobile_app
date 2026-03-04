@@ -403,7 +403,7 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
             children: [
               Icon(Icons.warning_amber_rounded, color: Colors.orange[700]),
               const SizedBox(width: 8),
-              const Text('Network Mismatch'),
+              const Flexible(child: Text('Network Mismatch')),
             ],
           ),
           content: Column(

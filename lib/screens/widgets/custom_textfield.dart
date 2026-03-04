@@ -55,6 +55,19 @@ class _CustomTextFieldState extends State<CustomTextField> {
   }
 
   @override
+  void didUpdateWidget(CustomTextField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Only reset obscure state if the parent explicitly changes obscureText
+    // AND there is no toggle (i.e. the parent is fully controlling it).
+    // If showPasswordToggle is true, the user controls visibility — never
+    // override their choice from outside.
+    if (!widget.showPasswordToggle &&
+        oldWidget.obscureText != widget.obscureText) {
+      _obscureText = widget.obscureText;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return TextFormField(
       controller: widget.controller,
@@ -76,6 +89,9 @@ class _CustomTextFieldState extends State<CustomTextField> {
         suffixIcon: widget.showPasswordToggle && widget.obscureText
             ? IconButton(
                 icon: Icon(
+                  // FIX: use _obscureText (current state) not widget.obscureText
+                  // (original prop) — previously this always showed the same
+                  // icon regardless of whether the user had toggled visibility
                   _obscureText ? Icons.visibility_off : Icons.visibility,
                 ),
                 onPressed: () {
