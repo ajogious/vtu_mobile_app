@@ -35,7 +35,7 @@ class RealApiService implements ApiService {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  // AUTH METHODS (CORRECTED)
+  // AUTH METHODS
   // ═══════════════════════════════════════════════════════════════════════════
 
   @override
@@ -51,11 +51,9 @@ class RealApiService implements ApiService {
 
       final responseData = response.data;
 
-      // ⚠️ API uses "ok" not "success"
       if (responseData['ok'] == true) {
         final data = responseData['data'];
 
-        // Save token
         final token = data['token'];
         if (token != null) {
           await _storage.saveToken(token);
@@ -96,7 +94,6 @@ class RealApiService implements ApiService {
         'password': password,
       };
 
-      // Add referral code if provided
       if (refer != null && refer.isNotEmpty) {
         requestData['refer'] = refer;
       }
@@ -108,11 +105,9 @@ class RealApiService implements ApiService {
 
       final responseData = response.data;
 
-      // ⚠️ API uses "ok" not "success"
       if (responseData['ok'] == true) {
         final data = responseData['data'];
 
-        // Save token
         final token = data['token'];
         if (token != null) {
           await _storage.saveToken(token);
@@ -225,7 +220,6 @@ class RealApiService implements ApiService {
 
       final responseData = response.data;
 
-      // Clear local token regardless of API response
       await _storage.deleteToken();
 
       if (responseData['ok'] == true) {
@@ -310,7 +304,6 @@ class RealApiService implements ApiService {
       final responseData = response.data;
 
       if (responseData['ok'] == true) {
-        // Fetch updated profile
         return await getMe();
       }
 
@@ -406,10 +399,6 @@ class RealApiService implements ApiService {
     }
   }
 
-  /// Hacks `/user/change-pin.php` to verify a PIN by trying to change it to itself.
-  /// If the API says "Incorrect old PIN" (usually ok == false), it fails.
-  /// If it says "Success" or any message about the NEW pin (which proves the OLD pin
-  /// was correct), it passes.
   Future<ApiResult<bool>> verifyPinAPI({required String pin}) async {
     try {
       final response = await _dio.post(
@@ -419,18 +408,10 @@ class RealApiService implements ApiService {
       final responseData = response.data;
       final msg = (responseData['message'] ?? '').toString().toLowerCase();
 
-      // If it changed successfully, the PIN was obviously correct.
       if (responseData['ok'] == true) {
         return ApiResult.success(true);
       }
 
-      // Any message about the NEW pin (not the old one) proves the old PIN was
-      // accepted. The API might say any of:
-      //   "New PIN cannot be the same as old PIN"
-      //   "New PIN does not match"
-      //   "New pin does not match confirm pin"
-      //   "New password does not match"
-      //   etc.
       if (msg.contains('new pin') ||
           msg.contains('new password') ||
           msg.contains('same') ||
@@ -439,7 +420,6 @@ class RealApiService implements ApiService {
         return ApiResult.success(true);
       }
 
-      // Otherwise, likely "Incorrect old PIN" — the PIN was wrong.
       return ApiResult.failure('Incorrect PIN. Please try again.');
     } on DioException catch (e) {
       return ApiResult.failure(_handleDioError(e));
@@ -454,8 +434,8 @@ class RealApiService implements ApiService {
 
   @override
   Future<ApiResult<List<VirtualAccount>>> verifyKyc({
-    required String type, // 'bvn' or 'nin'
-    required String value, // the 11-digit BVN or NIN
+    required String type,
+    required String value,
     required String pincode,
   }) async {
     try {
@@ -501,10 +481,6 @@ class RealApiService implements ApiService {
 
   @override
   Future<ApiResult<List<VirtualAccount>>> getVirtualAccounts() async {
-    // Read the user from local storage — account numbers (wema_account,
-    // moniepoint_account, sterling_account) are returned in the login response
-    // and saved there. The profile endpoint (/user/me.php) does NOT return them,
-    // so we must NOT call getMe() here.
     final user = _storage.getUser();
 
     if (user == null) {
@@ -558,7 +534,6 @@ class RealApiService implements ApiService {
   Future<ApiResult<Map<String, dynamic>>> initializePaystackPayment({
     required double amount,
   }) async {
-    // TODO: Implement when backend provides endpoint
     return ApiResult.failure(
       'Payment initialization endpoint not yet available',
     );
@@ -594,7 +569,7 @@ class RealApiService implements ApiService {
 
                   allPlans.add(
                     DataPlan(
-                      id: plan['id']?.toString() ?? '', // ← CAPTURE ID
+                      id: plan['id']?.toString() ?? '',
                       name: planName,
                       type: typeName,
                       price: (plan['price'] as num?)?.toDouble() ?? 0,
@@ -654,18 +629,7 @@ class RealApiService implements ApiService {
 
       if (responseData['ok'] == true) {
         final items = responseData['data']['items'] as List;
-
-        // Group plans by cable_type
-        final Map<String, dynamic> grouped = {};
-        for (final item in items) {
-          final type = item['cable_type'] as String;
-          if (!grouped.containsKey(type)) {
-            grouped[type] = [];
-          }
-          grouped[type].add(item);
-        }
-
-        return ApiResult.success(grouped);
+        return ApiResult.success({'items': items});
       }
 
       return ApiResult.failure(
@@ -745,6 +709,7 @@ class RealApiService implements ApiService {
       return ApiResult.failure(e.toString());
     }
   }
+
   // ═══════════════════════════════════════════════════════════════════════════
   // VALIDATION METHODS
   // ═══════════════════════════════════════════════════════════════════════════
@@ -755,7 +720,6 @@ class RealApiService implements ApiService {
     required String meterNumber,
     required String meterType,
   }) async {
-    // TODO: Implement when backend provides endpoint
     return ApiResult.failure('Meter validation endpoint not yet available');
   }
 
@@ -764,8 +728,40 @@ class RealApiService implements ApiService {
     required String provider,
     required String smartcard,
   }) async {
-    // TODO: Implement when backend provides endpoint
-    return ApiResult.failure('Smartcard validation endpoint not yet available');
+    try {
+      // ✅ FIX: Use FormData so PHP reads fields via $_POST correctly.
+      // The global Dio header sends 'Content-Type: application/json' which
+      // PHP's cable_validate.php cannot parse — it reads $_POST not php://input.
+      // FormData forces multipart encoding that PHP reads natively,
+      // bypassing the global JSON Content-Type header.
+      final response = await _dio.post(
+        ApiConfig.cableValidateEndpoint,
+        options: Options(
+          validateStatus: (status) => status != null && status < 600,
+          contentType: 'multipart/form-data',
+        ),
+        data: FormData.fromMap({'network': provider, 'iucno': smartcard}),
+      );
+
+      final responseData = response.data;
+
+      if (responseData['ok'] == true) {
+        final data = responseData['data'];
+        return ApiResult.success({
+          'customer_name': data['customer_name']?.toString() ?? '',
+          'status': data['status']?.toString() ?? 'success',
+        });
+      }
+
+      return ApiResult.failure(
+        responseData['message']?.toString() ??
+            'Failed to validate decoder. Please check the details and try again.',
+      );
+    } on DioException catch (e) {
+      return ApiResult.failure(_handleDioError(e));
+    } catch (e) {
+      return ApiResult.failure(e.toString());
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -783,9 +779,7 @@ class RealApiService implements ApiService {
       final response = await _dio.post(
         ApiConfig.buyAirtimeEndpoint,
         options: Options(
-          validateStatus: (status) {
-            return status != null && status < 600;
-          },
+          validateStatus: (status) => status != null && status < 600,
         ),
         data: {
           'network': network,
@@ -807,12 +801,9 @@ class RealApiService implements ApiService {
             ? Map<String, dynamic>.from(body['data'])
             : null;
 
-        // Check 3rd-party status — a non-SUCCESSFUL status means the provider
-        // processed but refunded (e.g. invalid number, low balance).
         final String status = (data?['status'] ?? '').toString().toUpperCase();
 
         if (status.isNotEmpty && status != 'SUCCESSFUL') {
-          // Prefer the nested provider message; fall back to top-level; then status
           final String? providerMessage = data?['message']?.toString();
           final String errorMessage =
               (providerMessage != null && providerMessage.isNotEmpty)
@@ -849,9 +840,7 @@ class RealApiService implements ApiService {
       final response = await _dio.post(
         ApiConfig.buyDataEndpoint,
         options: Options(
-          validateStatus: (status) {
-            return status != null && status < 600;
-          },
+          validateStatus: (status) => status != null && status < 600,
         ),
         data: {
           'network': network,
@@ -864,24 +853,7 @@ class RealApiService implements ApiService {
 
       final responseData = response.data;
 
-      // ================= DEBUG SECTION =================
-      print("============== BUY DATA DEBUG ==============");
-      print("FULL RESPONSE DATA: $responseData");
-      print("TYPE OF response.data: ${response.data.runtimeType}");
-
-      print("TOP LEVEL MESSAGE: ${responseData['message']}");
-      print("TOP LEVEL OK: ${responseData['ok']}");
-
-      print("DATA FIELD RAW: ${responseData['data']}");
-      print("TYPE OF DATA FIELD: ${responseData['data']?.runtimeType}");
-
-      print("STATUS FIELD: ${responseData['data']?['status']}");
-      print("PROVIDER MESSAGE: ${responseData['data']?['message']}");
-      print("============================================");
-      // =================================================
-
       final Map<String, dynamic> body = Map<String, dynamic>.from(responseData);
-
       final Map<String, dynamic>? data = body['data'] != null
           ? Map<String, dynamic>.from(body['data'])
           : null;
@@ -931,7 +903,6 @@ class RealApiService implements ApiService {
       if (responseData['ok'] == true) {
         final dynamic data = responseData['data'];
 
-        // Check 3rd-party status — REVERSED means the provider rejected the request
         final String status = (data != null ? (data['status'] ?? '') : '')
             .toString()
             .toUpperCase();
@@ -994,7 +965,6 @@ class RealApiService implements ApiService {
       if (responseData['ok'] == true) {
         final dynamic data = responseData['data'];
 
-        // Check 3rd-party status — REVERSED means the provider rejected the request
         final String status = (data != null ? (data['status'] ?? '') : '')
             .toString()
             .toUpperCase();
@@ -1051,7 +1021,6 @@ class RealApiService implements ApiService {
       if (responseData['ok'] == true) {
         final data = responseData['data'] ?? responseData;
 
-        // Check 3rd-party status — REVERSED means the provider rejected the request
         final status = (data['status'] ?? '').toString().toUpperCase();
         if (status.isNotEmpty && status != 'SUCCESSFUL') {
           final reason = data['message']?.toString();
@@ -1095,7 +1064,6 @@ class RealApiService implements ApiService {
       if (responseData['ok'] == true) {
         final data = responseData['data'] ?? responseData;
 
-        // Check 3rd-party status — REVERSED means the provider rejected the request
         final status = (data['status'] ?? '').toString().toUpperCase();
         if (status.isNotEmpty && status != 'SUCCESSFUL') {
           final reason = data['message']?.toString();
@@ -1191,11 +1159,19 @@ class RealApiService implements ApiService {
 
       if (responseData['ok'] == true) {
         final data = responseData['data'];
+        final refCredit =
+            data['ref_credit'] ??
+            data['commission_balance'] ??
+            data['commission'] ??
+            0;
+        final count = data['count'] ?? data['total_referrals'] ?? 0;
+        final totalEarnings =
+            data['total_earnings'] ?? data['total_commission'] ?? refCredit;
         final stats = ReferralStats(
-          totalEarnings: double.parse(data['ref_credit']?.toString() ?? '0'),
-          availableBalance: double.parse(data['ref_credit']?.toString() ?? '0'),
-          totalReferrals: data['count'] ?? 0,
-          activeReferrals: data['count'] ?? 0,
+          totalEarnings: double.parse(totalEarnings.toString()),
+          availableBalance: double.parse(refCredit.toString()),
+          totalReferrals: int.tryParse(count.toString()) ?? 0,
+          activeReferrals: int.tryParse(count.toString()) ?? 0,
         );
         return ApiResult.success(stats);
       }
@@ -1217,7 +1193,15 @@ class RealApiService implements ApiService {
       final responseData = response.data;
 
       if (responseData['ok'] == true) {
-        final items = responseData['data']['items'] as List? ?? [];
+        final data = responseData['data'];
+        final items =
+            (data['items'] ??
+                    data['history'] ??
+                    data['earnings'] ??
+                    data['referrals'] ??
+                    data['list'] ??
+                    [])
+                as List;
         final earnings = items.map((e) => ReferralEarning.fromJson(e)).toList();
         return ApiResult.success(earnings);
       }
@@ -1245,8 +1229,16 @@ class RealApiService implements ApiService {
 
       final responseData = response.data;
 
-      if (responseData['success'] == true) {
-        return ApiResult.success(responseData['data']);
+      if (responseData['ok'] == true) {
+        final data = responseData['data'] as Map<String, dynamic>;
+        return ApiResult.success({
+          'reference': data['reference'],
+          'amount': (data['amount'] as num?)?.toDouble() ?? amount,
+          'wallet_balance': (data['wallet_balance'] as num?)?.toDouble() ?? 0.0,
+          'commission_balance':
+              (data['commission_balance'] as num?)?.toDouble() ?? 0.0,
+          'message': responseData['message'] ?? 'Withdrawal successful',
+        });
       }
 
       return ApiResult.failure(responseData['message'] ?? 'Withdrawal failed');
@@ -1270,13 +1262,17 @@ class RealApiService implements ApiService {
     try {
       final response = await _dio.post(
         ApiConfig.atcRequestEndpoint,
-        data: {'network': network, 'amount': amount, 'sender_phone': number},
+        data: {
+          'network': network,
+          'amount': amount.toInt(), // ← was just `amount` (double), now int
+          'sender_phone': number,
+        },
       );
 
       final responseData = response.data;
 
       if (responseData['ok'] == true) {
-        return ApiResult.success(responseData['data']); // return full data map
+        return ApiResult.success(responseData['data']);
       }
 
       return ApiResult.failure(responseData['message'] ?? 'Request failed');
@@ -1307,7 +1303,6 @@ class RealApiService implements ApiService {
         final statusCode = e.response?.statusCode;
         final data = e.response?.data;
 
-        // Check response body message first
         if (data is Map && data['message'] != null) {
           return data['message'];
         }
@@ -1331,6 +1326,30 @@ class RealApiService implements ApiService {
         return 'An error occurred. Please try again.';
     }
   }
+
+  @override
+  Future<ApiResult<List<ATCNetwork>>> getATCNetworks() async {
+    try {
+      final response = await _dio.get(ApiConfig.atcNetworksEndpoint);
+      final responseData = response.data;
+
+      if (responseData['ok'] == true) {
+        final items = responseData['data']['items'] as List;
+        final networks = items
+            .map((e) => ATCNetwork.fromJson(e as Map<String, dynamic>))
+            .toList();
+        return ApiResult.success(networks);
+      }
+
+      return ApiResult.failure(
+        responseData['message'] ?? 'Failed to load ATC networks',
+      );
+    } on DioException catch (e) {
+      return ApiResult.failure(_handleDioError(e));
+    } catch (e) {
+      return ApiResult.failure(e.toString());
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1347,7 +1366,6 @@ class _AuthInterceptor extends Interceptor {
     RequestOptions options,
     RequestInterceptorHandler handler,
   ) async {
-    // Add token to all requests (getToken is async)
     final token = await _storage.getToken();
     if (token != null && token.isNotEmpty) {
       options.headers['Authorization'] = 'Bearer $token';
@@ -1360,12 +1378,8 @@ class _AuthInterceptor extends Interceptor {
 class _ErrorInterceptor extends Interceptor {
   @override
   void onError(DioException err, ErrorInterceptorHandler handler) {
-    // Handle 401 globally (token expired)
-    // Exclude the login endpoint because 401 there just means wrong credentials
     if (err.response?.statusCode == 401 &&
         !(err.requestOptions.path.contains('login'))) {
-      // Token expired - trigger logout
-      // This will be caught by the error handler in the API methods
       ApiService.onUnauthenticated.add(null);
     }
 

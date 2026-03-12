@@ -3,6 +3,7 @@ import '../models/user_model.dart';
 import '../services/auth_service.dart';
 import '../services/storage_service.dart';
 import '../services/cache_service.dart';
+import '../services/notification_service.dart';
 
 class WalletProvider extends ChangeNotifier {
   final AuthService _authService = AuthService();
@@ -67,13 +68,27 @@ class WalletProvider extends ChangeNotifier {
     notifyListeners();
 
     try {
+      final previousBalance = _balance;
       final result = await _authService.api.getWalletBalance();
 
       if (result.success && result.data != null) {
-        setBalance(result.data!);
+        final newBalance = result.data!;
+        setBalance(newBalance);
         await _storage.updateUserBalance(_balance);
         _isLoading = false;
         notifyListeners();
+
+        // If the balance went UP compared to before (external credit: admin
+        // top-up or virtual account funding), fire a wallet notification.
+        // Only do this on a forced refresh (not first-load) to avoid a
+        // false positive on initial page load.
+        if (forceRefresh &&
+            newBalance > previousBalance &&
+            previousBalance > 0) {
+          final credited = newBalance - previousBalance;
+          NotificationService.walletCredited(credited, 'Bank Transfer / Admin');
+        }
+
         return true;
       } else {
         _error = result.error ?? 'Failed to fetch balance';

@@ -44,6 +44,16 @@ class AppLockProvider with ChangeNotifier {
     final now = DateTime.now();
     final backgroundDuration = now.difference(_backgroundedAt!);
 
+    // Ignore very short background durations (< 3 seconds).
+    // Flutter fires paused→resumed when the USB debugger attaches, when a
+    // biometric prompt appears, or when a system notification banner drops
+    // down. Locking for these transient states is undesirable and causes the
+    // bug where the app locks immediately on a fresh debug run.
+    if (backgroundDuration.inSeconds < 3) {
+      _backgroundedAt = null;
+      return;
+    }
+
     bool shouldLock = false;
 
     switch (_autoLockDuration) {

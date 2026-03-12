@@ -151,6 +151,7 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
       _isValidated = false;
     });
 
+    // Capture authService BEFORE the async gap
     final authService = context.read<AuthProvider>().authService;
     final result = await authService.api.validateSmartcard(
       provider: _selectedProvider!,
@@ -171,7 +172,8 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
 
       UiHelpers.showSnackBar(context, 'Smartcard validated successfully');
 
-      _loadCablePlans(_selectedProvider!);
+      // Load plans after successful validation
+      await _loadCablePlans(_selectedProvider!);
     } else {
       UiHelpers.showSnackBar(
         context,
@@ -182,17 +184,19 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
   }
 
   Future<void> _loadCablePlans(String provider) async {
-    final isOnline = context.read<NetworkProvider>().isOnline;
+    if (!mounted) return;
 
+    final isOnline = context.read<NetworkProvider>().isOnline;
     final cachedPlans = CacheService.getCachedCablePlans(provider);
 
     if (!isOnline) {
-      if (cachedPlans != null) {
+      if (cachedPlans != null && cachedPlans.isNotEmpty) {
         setState(() {
           _allPlans = cachedPlans;
           _searchedPlans = _allPlans;
         });
       } else {
+        if (!mounted) return;
         UiHelpers.showSnackBar(
           context,
           'No internet and no cached plans available',
@@ -205,8 +209,11 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
     setState(() {
       _isLoadingPlans = true;
       _loadPlansError = null;
+      _allPlans = [];
+      _searchedPlans = [];
     });
 
+    // Capture authService BEFORE the async gap
     final authService = context.read<AuthProvider>().authService;
     final result = await authService.api.getCablePlans();
 
@@ -217,35 +224,65 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
     });
 
     if (result.success && result.data != null) {
-      final items = result.data!['items'] as List?;
+      // ✅ FIX: Safe cast — don't assume items is non-null
+      final rawItems = result.data!['items'];
+      final items = rawItems is List ? rawItems : <dynamic>[];
+
+      print("========== CABLE PLANS DEBUG ==========");
+      print("Total items from API: ${items.length}");
+      print("Filtering for provider: '$provider'");
+
       final parsedPlans = <CablePlan>[];
 
-      if (items != null) {
-        for (final plan in items) {
-          if (plan['cable_type'] == provider) {
-            parsedPlans.add(
-              CablePlan(
-                id: plan['id'].toString(),
-                name: plan['cable_plan'].toString().trim(),
-                price: double.parse(plan['amount'].toString()),
-                duration: plan['duration'].toString().trim(),
-                provider: provider,
-              ),
-            );
-          }
+      for (final plan in items) {
+        if (plan is! Map) continue;
+
+        // ✅ FIX: Trim both sides before comparing to handle any whitespace
+        final cableType = plan['cable_type']?.toString().trim() ?? '';
+        final providerTrimmed = provider.trim();
+
+        print(
+          "  Item cable_type: '$cableType' == '$providerTrimmed'? ${cableType == providerTrimmed}",
+        );
+
+        if (cableType == providerTrimmed) {
+          parsedPlans.add(
+            CablePlan(
+              id: plan['id']?.toString() ?? '',
+              name: plan['cable_plan']?.toString().trim() ?? '',
+              price: double.tryParse(plan['amount']?.toString() ?? '0') ?? 0.0,
+              duration: plan['duration']?.toString().trim() ?? '',
+              provider: provider,
+            ),
+          );
         }
       }
 
+      print("Parsed plans for '$provider': ${parsedPlans.length}");
+      print("=======================================");
+
+      // Cache for offline use
       await CacheService.cacheCablePlans(provider, parsedPlans);
 
-      setState(() {
-        _allPlans = parsedPlans;
-        _searchedPlans = _allPlans;
-      });
+      if (!mounted) return;
+
+      if (parsedPlans.isEmpty) {
+        setState(() {
+          _loadPlansError = 'No packages available for $provider';
+        });
+      } else {
+        setState(() {
+          _allPlans = parsedPlans;
+          _searchedPlans = parsedPlans;
+        });
+      }
     } else {
       setState(() {
         _loadPlansError = result.error ?? 'Failed to load packages';
       });
+
+      if (!mounted) return;
+      UiHelpers.showSnackBar(context, _loadPlansError!, isError: true);
     }
   }
 
@@ -353,6 +390,8 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
       ),
     );
 
+    if (!mounted) return;
+
     if (confirmed == true) {
       _buyCable();
     }
@@ -381,6 +420,8 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
   }
 
   Future<void> _buyCable() async {
+    if (!mounted) return;
+
     final isOnline = context.read<NetworkProvider>().isOnline;
     if (!isOnline) {
       ErrorHandler.handleOfflineMode(context);
@@ -404,6 +445,8 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
       serverPinSet: serverPinSet,
     );
 
+    if (!mounted) return;
+
     if (verifiedPin == null) {
       UiHelpers.showSnackBar(context, 'Transaction cancelled', isError: true);
       return;
@@ -414,6 +457,8 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
         context,
         action: 'authorize this large transaction',
       );
+
+      if (!mounted) return;
 
       if (!reAuthenticated) {
         UiHelpers.showSnackBar(
@@ -429,6 +474,7 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
       _isProcessing = true;
     });
 
+    // Capture authService BEFORE the async gap
     final authService = context.read<AuthProvider>().authService;
     final result = await authService.api.buyCable(
       provider: _selectedProvider!,
@@ -445,6 +491,8 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
 
     if (result.success && result.data != null) {
       await _saveBeneficiaryToStorage();
+
+      if (!mounted) return;
 
       final walletProvider = context.read<WalletProvider>();
       final balanceBefore = walletProvider.balance;
@@ -470,14 +518,16 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
 
       context.read<TransactionProvider>().addTransaction(transaction);
 
-      // Fire notification
       await NotificationService.transactionSuccess(transaction);
 
-      // Check low balance
+      if (!mounted) return;
+
       final newBalance = context.read<WalletProvider>().balance;
       if (newBalance < 500) {
         await NotificationService.lowBalance(newBalance);
       }
+
+      if (!mounted) return;
 
       Navigator.pushReplacement(
         context,
@@ -489,7 +539,6 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
         ),
       );
     } else {
-      await Future.delayed(Duration.zero);
       if (!mounted) return;
       final errorMsg = result.error ?? 'Purchase failed';
       ScaffoldMessenger.of(context).showSnackBar(
@@ -613,7 +662,7 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
                     const SizedBox(height: 24),
                   ],
 
-                  // Search Bar
+                  // Search Bar — only show when plans are loaded
                   if (_allPlans.isNotEmpty) ...[
                     CustomTextField(
                       controller: _searchController,
@@ -634,12 +683,18 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
                     const SizedBox(height: 16),
                   ],
 
-                  // Loading Plans
+                  // Loading Plans indicator
                   if (_isLoadingPlans)
                     const Center(
                       child: Padding(
                         padding: EdgeInsets.all(32),
-                        child: CircularProgressIndicator(),
+                        child: Column(
+                          children: [
+                            CircularProgressIndicator(),
+                            SizedBox(height: 12),
+                            Text('Loading packages...'),
+                          ],
+                        ),
                       ),
                     ),
 
@@ -673,12 +728,13 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
                       message: _loadPlansError!,
                       onRetry: () {
                         setState(() => _loadPlansError = null);
-                        if (_selectedProvider != null)
+                        if (_selectedProvider != null) {
                           _loadCablePlans(_selectedProvider!);
+                        }
                       },
                     ),
 
-                  // No plans message
+                  // No plans found after search
                   if (!_isLoadingPlans &&
                       _loadPlansError == null &&
                       _isValidated &&
@@ -696,7 +752,7 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
                       },
                     ),
 
-                  // Save Beneficiary
+                  // Save Beneficiary checkbox
                   if (_selectedPlan != null)
                     CheckboxListTile(
                       value: _saveBeneficiary,
@@ -822,7 +878,7 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
   }
 
   Widget _buildPlanCard(CablePlan plan) {
-    final isSelected = _selectedPlan?.name == plan.name;
+    final isSelected = _selectedPlan?.id == plan.id;
 
     return GestureDetector(
       onTap: () {

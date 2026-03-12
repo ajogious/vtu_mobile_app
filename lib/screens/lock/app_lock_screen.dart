@@ -16,8 +16,10 @@ class AppLockScreen extends StatefulWidget {
 
 class _AppLockScreenState extends State<AppLockScreen> {
   final _passwordController = TextEditingController();
+  final _focusNode = FocusNode();
   String _errorMessage = '';
-  bool _isLoading = false;
+  bool _isLoading = false; // password verify in progress
+  bool _isBiometricLoading = false; // biometric prompt in progress
   bool _isTryingBiometric = false; // guard against concurrent biometric prompts
   bool _biometricAvailable = false;
   String _biometricLabel = 'Biometric';
@@ -29,11 +31,21 @@ class _AppLockScreenState extends State<AppLockScreen> {
   void initState() {
     super.initState();
     _checkBiometricAndAutoUnlock();
+    // Request focus after the first frame so the keyboard appears
+    // automatically — this is needed because the lock screen lives inside
+    // MaterialApp.builder (outside the Navigator) and the TextField won't
+    // auto-focus on its own in that context.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && !_isBiometricLoading) {
+        _focusNode.requestFocus();
+      }
+    });
   }
 
   @override
   void dispose() {
     _passwordController.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
@@ -64,7 +76,7 @@ class _AppLockScreenState extends State<AppLockScreen> {
     if (_isTryingBiometric) return;
 
     setState(() {
-      _isLoading = true;
+      _isBiometricLoading = true;
       _isTryingBiometric = true;
     });
 
@@ -73,7 +85,7 @@ class _AppLockScreenState extends State<AppLockScreen> {
     if (!mounted) return;
 
     setState(() {
-      _isLoading = false;
+      _isBiometricLoading = false;
       _isTryingBiometric = false;
     });
 
@@ -201,7 +213,9 @@ class _AppLockScreenState extends State<AppLockScreen> {
                   const SizedBox(height: 48),
 
                   // Biometric Button
-                  if (_biometricAvailable && !_isLoading && !_isLocked) ...[
+                  if (_biometricAvailable &&
+                      !_isBiometricLoading &&
+                      !_isLocked) ...[
                     ElevatedButton.icon(
                       onPressed: _tryBiometric,
                       icon: Icon(_biometricIcon, size: 28),
@@ -227,83 +241,89 @@ class _AppLockScreenState extends State<AppLockScreen> {
                     const SizedBox(height: 24),
                   ],
 
-                  // Loading
-                  if (_isLoading) ...[
+                  // Biometric loading indicator (separate from password loading)
+                  if (_isBiometricLoading) ...[
                     const Center(child: CircularProgressIndicator()),
                     const SizedBox(height: 24),
                   ],
 
-                  // PIN Input
-                  if (!_isLoading) ...[
-                    CustomTextField(
-                      controller: _passwordController,
-                      obscureText: true,
-                      showPasswordToggle: true,
-                      keyboardType: TextInputType.visiblePassword,
-                      enabled: !_isLocked,
-                      hintText: 'Password',
-                      prefixIcon: Icons.lock,
-                      onSubmitted: (_) => _verifyPassword(),
-                      onChanged: (value) {
-                        if (_errorMessage.isNotEmpty && !_isLocked) {
-                          setState(() {
-                            _errorMessage = '';
-                          });
-                        }
-                      },
-                    ),
-                    if (_errorMessage.isNotEmpty)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 8.0, left: 16.0),
-                        child: Align(
-                          alignment: Alignment.centerLeft,
-                          child: Text(
-                            _errorMessage,
-                            style: TextStyle(
-                              color: Theme.of(context).colorScheme.error,
-                              fontSize: 12,
-                            ),
+                  // Password Input — always kept in the widget tree so Flutter
+                  // never destroys the TextField and loses focus/input state.
+                  CustomTextField(
+                    controller: _passwordController,
+                    focusNode: _focusNode,
+                    autofocus: true,
+                    obscureText: true,
+                    showPasswordToggle: true,
+                    keyboardType: TextInputType.visiblePassword,
+                    enabled: !_isLocked && !_isLoading,
+                    hintText: 'Password',
+                    prefixIcon: Icons.lock,
+                    onSubmitted: (_) => _verifyPassword(),
+                    onChanged: (value) {
+                      if (_errorMessage.isNotEmpty && !_isLocked) {
+                        setState(() {
+                          _errorMessage = '';
+                        });
+                      }
+                    },
+                  ),
+                  if (_errorMessage.isNotEmpty)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8.0, left: 16.0),
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _errorMessage,
+                          style: TextStyle(
+                            color: Theme.of(context).colorScheme.error,
+                            fontSize: 12,
                           ),
                         ),
                       ),
-                    const SizedBox(height: 24),
+                    ),
+                  const SizedBox(height: 24),
 
-                    if (!_isLocked)
-                      ElevatedButton(
-                        onPressed: _verifyPassword,
-                        style: ElevatedButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                        ),
-                        child: const Text(
-                          'Unlock',
-                          style: TextStyle(fontSize: 16),
-                        ),
+                  // Unlock button / password-verify spinner
+                  if (_isLoading)
+                    const Center(child: CircularProgressIndicator())
+                  else if (!_isLocked)
+                    ElevatedButton(
+                      onPressed: _verifyPassword,
+                      style: ElevatedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 16),
                       ),
+                      child: const Text(
+                        'Unlock',
+                        style: TextStyle(fontSize: 16),
+                      ),
+                    ),
 
-                    // Locked countdown
-                    if (_isLocked) ...[
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: Colors.red[50],
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(Icons.timer, color: Colors.red[700]),
-                            const SizedBox(width: 8),
-                            Text(
+                  // Locked countdown
+                  if (_isLocked) ...[
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.red[50],
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.timer, color: Colors.red[700]),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
                               'Account locked. Please wait 30 seconds.',
                               style: TextStyle(
                                 color: Colors.red[900],
                                 fontSize: 13,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
-                    ],
+                    ),
                   ],
                 ],
               ),

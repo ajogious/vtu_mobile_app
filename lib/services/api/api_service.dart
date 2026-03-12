@@ -10,7 +10,8 @@ import '../../models/user_model.dart';
 import '../../models/virtual_account_model.dart';
 
 abstract class ApiService {
-  static final StreamController<void> onUnauthenticated = StreamController<void>.broadcast();
+  static final StreamController<void> onUnauthenticated =
+      StreamController<void>.broadcast();
 
   // ========== AUTHENTICATION ==========
 
@@ -179,6 +180,7 @@ abstract class ApiService {
   });
 
   // ========== AIRTIME TO CASH ==========
+  Future<ApiResult<List<ATCNetwork>>> getATCNetworks();
 
   Future<ApiResult<Map<String, dynamic>>> submitATCRequest({
     required String network,

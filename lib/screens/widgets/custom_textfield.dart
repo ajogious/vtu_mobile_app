@@ -3,6 +3,8 @@ import 'package:flutter/services.dart';
 
 class CustomTextField extends StatefulWidget {
   final TextEditingController? controller;
+  final FocusNode? focusNode;
+  final bool autofocus;
   final String? labelText;
   final String? hintText;
   final String? helperText;
@@ -23,6 +25,8 @@ class CustomTextField extends StatefulWidget {
   const CustomTextField({
     super.key,
     this.controller,
+    this.focusNode,
+    this.autofocus = false,
     this.labelText,
     this.hintText,
     this.helperText,
@@ -71,6 +75,8 @@ class _CustomTextFieldState extends State<CustomTextField> {
   Widget build(BuildContext context) {
     return TextFormField(
       controller: widget.controller,
+      focusNode: widget.focusNode,
+      autofocus: widget.autofocus,
       obscureText: _obscureText,
       keyboardType: widget.keyboardType,
       validator: widget.validator,

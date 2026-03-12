@@ -4,89 +4,13 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
+import '../../models/atc_request_model.dart';
 import '../../providers/auth_provider.dart';
-import '../../models/airtime_network_model.dart';
-import '../widgets/network_selector.dart';
+import '../../utils/nigeria_network_validator.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_textfield.dart';
 import '../widgets/loading_overlay.dart';
 import '../../utils/ui_helpers.dart';
-
-class NigeriaNetworkValidator {
-  static const Map<String, List<String>> _networkPrefixes = {
-    'MTN': [
-      '0703',
-      '0706',
-      '0803',
-      '0806',
-      '0810',
-      '0813',
-      '0814',
-      '0816',
-      '0903',
-      '0906',
-      '0913',
-      '0916',
-      '0704',
-      '07025',
-      '07026',
-    ],
-    'GLO': ['0705', '0805', '0807', '0811', '0815', '0905', '0915'],
-    'AIRTEL': [
-      '0701',
-      '0708',
-      '0802',
-      '0808',
-      '0812',
-      '0901',
-      '0902',
-      '0904',
-      '0907',
-      '0912',
-    ],
-    '9MOBILE': ['0809', '0817', '0818', '0908', '0909'],
-    'NTEL': ['0804'],
-    'SMILE': ['0702'],
-    'STARCOMMS': ['07028', '07029', '0819'],
-    'MULTILINKS': ['07027', '0709'],
-  };
-
-  static String? getNetworkForNumber(String phone) {
-    final normalized = _normalize(phone);
-    if (normalized == null) return null;
-    final prefix = normalized.substring(0, 4);
-    for (final entry in _networkPrefixes.entries) {
-      if (entry.value.contains(prefix)) return entry.key;
-    }
-    return null;
-  }
-
-  static String? getMismatchWarning(String phone, String selectedNetwork) {
-    final normalized = _normalize(phone);
-    if (normalized == null) return null;
-    final detectedNetwork = getNetworkForNumber(normalized);
-    if (detectedNetwork == null) return null;
-    if (detectedNetwork != selectedNetwork.toUpperCase()) {
-      return '$normalized looks like a $detectedNetwork number, '
-          'but you selected $selectedNetwork.';
-    }
-    return null;
-  }
-
-  static String? _normalize(String phone) {
-    String cleaned = phone.replaceAll(RegExp(r'[\s\-\(\)\.]'), '');
-    if (cleaned.startsWith('+234'))
-      cleaned = '0${cleaned.substring(4)}';
-    else if (cleaned.startsWith('234'))
-      cleaned = '0${cleaned.substring(3)}';
-    if (cleaned.length != 11 || !cleaned.startsWith('0')) return null;
-    return cleaned;
-  }
-
-  static List<String>? getPrefixesForNetwork(String network) {
-    return _networkPrefixes[network.toUpperCase()];
-  }
-}
 
 class AtcRequestScreen extends StatefulWidget {
   const AtcRequestScreen({super.key});
@@ -100,37 +24,30 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
   final _phoneController = TextEditingController();
   final _amountController = TextEditingController();
 
-  String? _selectedNetwork;
+  ATCNetwork? _selectedATCNetwork;
   bool _acceptTerms = false;
   bool _isProcessing = false;
-  int? _apiRate;
   String? _networkMismatchWarning;
 
-  List<AirtimeNetwork> _networks = [];
+  List<ATCNetwork> _atcNetworks = [];
   bool _isLoadingNetworks = true;
 
-  final Map<String, int> _estimatedRates = {
-    'MTN': 90,
-    'GLO': 88,
-    'AIRTEL': 89,
-    '9MOBILE': 87,
-  };
-
-  int get _displayRate => _apiRate ?? (_estimatedRates[_selectedNetwork] ?? 85);
+  // ── Derived helpers ───────────────────────────────────────────────
+  int get _displayRate =>
+      _selectedATCNetwork != null ? _selectedATCNetwork!.rate.round() : 0;
 
   double get _conversionRate => _displayRate / 100;
 
-  double get _airtimeAmount {
-    final amount = double.tryParse(_amountController.text.trim());
-    return amount ?? 0;
-  }
+  double get _airtimeAmount =>
+      double.tryParse(_amountController.text.trim()) ?? 0;
 
   double get _receivableAmount => _airtimeAmount * _conversionRate;
 
+  // ── Lifecycle ─────────────────────────────────────────────────────
   @override
   void initState() {
     super.initState();
-    _loadNetworks();
+    _loadATCNetworks();
   }
 
   @override
@@ -140,14 +57,16 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
     super.dispose();
   }
 
-  Future<void> _loadNetworks() async {
+  // ── Data loading ──────────────────────────────────────────────────
+  Future<void> _loadATCNetworks() async {
     setState(() => _isLoadingNetworks = true);
     final authService = context.read<AuthProvider>().authService;
-    final result = await authService.api.getAirtimeNetworks();
+    final result = await authService.api.getATCNetworks();
     if (!mounted) return;
     if (result.success && result.data != null) {
       setState(() {
-        _networks = result.data!;
+        // Only show networks that are active (rate > 0 and receivePhone set)
+        _atcNetworks = result.data!.where((n) => n.isAvailable).toList();
         _isLoadingNetworks = false;
       });
     } else {
@@ -160,30 +79,29 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
     }
   }
 
+  // ── Mismatch check ────────────────────────────────────────────────
   void _checkNetworkMismatch() {
-    if (_selectedNetwork == null || _phoneController.text.trim().isEmpty) {
-      setState(() => _networkMismatchWarning = null);
-      return;
-    }
-    if (_phoneController.text.trim().length < 11) {
+    if (_selectedATCNetwork == null ||
+        _phoneController.text.trim().length < 11) {
       setState(() => _networkMismatchWarning = null);
       return;
     }
     setState(() {
       _networkMismatchWarning = NigeriaNetworkValidator.getMismatchWarning(
         _phoneController.text.trim(),
-        _selectedNetwork!,
+        _selectedATCNetwork!.network,
       );
     });
   }
 
+  // ── Contact picker ────────────────────────────────────────────────
   Future<void> _pickContact() async {
     final permission = await Permission.contacts.request();
     if (!permission.isGranted) {
       if (!mounted) return;
       UiHelpers.showSnackBar(
         context,
-        'Contact permission is required to pick a number',
+        'Contact permission is required',
         isError: true,
       );
       return;
@@ -191,31 +109,127 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
     try {
       final contact = await FlutterContacts.openExternalPick();
       if (contact != null) {
-        final fullContact = await FlutterContacts.getContact(contact.id);
-        if (fullContact != null && fullContact.phones.isNotEmpty) {
-          String phone = fullContact.phones.first.number;
-          phone = phone.replaceAll(RegExp(r'[\s\-\(\)]'), '');
-          if (phone.startsWith('+234')) {
+        final full = await FlutterContacts.getContact(contact.id);
+        if (full != null && full.phones.isNotEmpty) {
+          String phone = full.phones.first.number.replaceAll(
+            RegExp(r'[\s\-\(\)]'),
+            '',
+          );
+          if (phone.startsWith('+234'))
             phone = '0${phone.substring(4)}';
-          } else if (phone.startsWith('234')) {
+          else if (phone.startsWith('234'))
             phone = '0${phone.substring(3)}';
-          }
           if (!phone.startsWith('0')) phone = '0$phone';
           if (phone.length > 11) phone = phone.substring(0, 11);
           setState(() => _phoneController.text = phone);
           _checkNetworkMismatch();
         }
       }
-    } catch (e) {
+    } catch (_) {
       if (!mounted) return;
       UiHelpers.showSnackBar(context, 'Failed to pick contact', isError: true);
     }
   }
 
+  // ── Network selector widget ───────────────────────────────────────
+  Widget _buildNetworkSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Select Network',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 12),
+        Wrap(
+          spacing: 10,
+          runSpacing: 10,
+          children: _atcNetworks.map((atcNetwork) {
+            final isSelected =
+                _selectedATCNetwork?.network == atcNetwork.network;
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  _selectedATCNetwork = atcNetwork;
+                  _networkMismatchWarning = null;
+                });
+                _checkNetworkMismatch();
+              },
+              child: AnimatedContainer(
+                duration: const Duration(milliseconds: 200),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: isSelected
+                      ? Theme.of(context).primaryColor
+                      : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(
+                    color: isSelected
+                        ? Theme.of(context).primaryColor
+                        : Colors.grey[300]!,
+                    width: isSelected ? 2 : 1,
+                  ),
+                  boxShadow: isSelected
+                      ? [
+                          BoxShadow(
+                            color: Theme.of(
+                              context,
+                            ).primaryColor.withOpacity(0.3),
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: Column(
+                  children: [
+                    Text(
+                      atcNetwork.network,
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 14,
+                        color: isSelected ? Colors.white : Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 8,
+                        vertical: 2,
+                      ),
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? Colors.white.withOpacity(0.25)
+                            : Colors.green[50],
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        '${atcNetwork.rate.toStringAsFixed(0)}% rate',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: isSelected ? Colors.white : Colors.green[700],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
+  }
+
+  // ── Confirmation dialog ───────────────────────────────────────────
   Future<void> _showConfirmationDialog() async {
     UiHelpers.dismissKeyboard(context);
     if (!_formKey.currentState!.validate()) return;
-    if (_selectedNetwork == null) {
+    if (_selectedATCNetwork == null) {
       UiHelpers.showSnackBar(context, 'Please select a network', isError: true);
       return;
     }
@@ -241,48 +255,29 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _buildConfirmRow('Network', _selectedNetwork!),
+                _buildConfirmRow('Network', _selectedATCNetwork!.network),
                 _buildConfirmRow('Phone Number', _phoneController.text.trim()),
                 _buildConfirmRow(
                   'Airtime Amount',
                   'N${NumberFormat('#,##0').format(_airtimeAmount)}',
                 ),
-                _buildConfirmRow('Est. Conversion Rate', '$_displayRate%'),
+                _buildConfirmRow('Conversion Rate', '$_displayRate%'),
+                // Show the receive_phone so user already knows where to send
+                _buildConfirmRow(
+                  'Send Airtime To',
+                  _selectedATCNetwork!.receivePhone,
+                  highlight: true,
+                ),
                 const Divider(height: 24),
                 _buildConfirmRow(
-                  'Est. You Will Receive',
+                  'You Will Receive',
                   'N${NumberFormat('#,##0.00').format(_receivableAmount)}',
                   isBold: true,
                 ),
                 if (_networkMismatchWarning != null) ...[
                   const SizedBox(height: 12),
-                  Container(
-                    padding: const EdgeInsets.all(10),
-                    decoration: BoxDecoration(
-                      color: Colors.orange[50],
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: Colors.orange[300]!),
-                    ),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.warning_amber_rounded,
-                          color: Colors.orange[700],
-                          size: 16,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            '$_networkMismatchWarning This may still work if the number is ported.',
-                            style: TextStyle(
-                              color: Colors.orange[800],
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
+                  _buildWarningBox(
+                    '$_networkMismatchWarning This may still work if the number is ported.',
                   ),
                 ],
                 const SizedBox(height: 12),
@@ -303,8 +298,8 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                       const SizedBox(width: 12),
                       Expanded(
                         child: Text(
-                          'Final rate will be confirmed by the server. '
-                          'Your request will be submitted for admin review and approval.',
+                          'Your request will be submitted for admin review. '
+                          'Cash will be credited after approval.',
                           style: TextStyle(
                             color: Colors.orange[900],
                             fontSize: 12,
@@ -334,7 +329,12 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
     if (confirmed == true) _submitRequest();
   }
 
-  Widget _buildConfirmRow(String label, String value, {bool isBold = false}) {
+  Widget _buildConfirmRow(
+    String label,
+    String value, {
+    bool isBold = false,
+    bool highlight = false,
+  }) {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -345,8 +345,11 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
             child: Text(
               value,
               style: TextStyle(
-                fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+                fontWeight: (isBold || highlight)
+                    ? FontWeight.bold
+                    : FontWeight.normal,
                 fontSize: isBold ? 16 : 14,
+                color: highlight ? Colors.orange[800] : null,
               ),
               textAlign: TextAlign.right,
             ),
@@ -356,13 +359,41 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
     );
   }
 
+  Widget _buildWarningBox(String message) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.orange[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.orange[300]!),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(
+            Icons.warning_amber_rounded,
+            color: Colors.orange[700],
+            size: 16,
+          ),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              message,
+              style: TextStyle(color: Colors.orange[800], fontSize: 12),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ── Submit ────────────────────────────────────────────────────────
   Future<void> _submitRequest() async {
     setState(() => _isProcessing = true);
-
     try {
       final authService = context.read<AuthProvider>().authService;
       final result = await authService.api.submitATCRequest(
-        network: _selectedNetwork!,
+        network: _selectedATCNetwork!.network,
         amount: _airtimeAmount,
         number: _phoneController.text.trim(),
       );
@@ -390,16 +421,18 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
     }
   }
 
+  // ── Success dialog ────────────────────────────────────────────────
   void _showSuccessDialog(Map<String, dynamic> data) {
     final transactionId = data['transaction_id']?.toString() ?? '';
-    final sendTo = data['send_to']?.toString() ?? '';
-    final youGet = (data['you_get'] as num?)?.toDouble() ?? 0.0;
-    final ratePercent = data['rate_percent'];
-    final int rate = ratePercent is int
-        ? ratePercent
-        : int.tryParse(ratePercent?.toString() ?? '') ?? _displayRate;
 
-    setState(() => _apiRate = rate);
+    // Prefer receive_phone from the already-loaded ATCNetwork;
+    // fall back to whatever the POST response returns.
+    final sendTo = _selectedATCNetwork?.receivePhone.isNotEmpty == true
+        ? _selectedATCNetwork!.receivePhone
+        : data['send_to']?.toString() ?? '';
+
+    final youGet = (data['you_get'] as num?)?.toDouble() ?? _receivableAmount;
+    final rate = _displayRate;
 
     showDialog(
       context: context,
@@ -428,15 +461,16 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
               ),
               const SizedBox(height: 12),
-              Text(
-                'Ref: $transactionId',
-                style: TextStyle(
-                  color: Colors.grey[600],
-                  fontSize: 12,
-                  fontFamily: 'monospace',
+              if (transactionId.isNotEmpty)
+                Text(
+                  'Ref: $transactionId',
+                  style: TextStyle(
+                    color: Colors.grey[600],
+                    fontSize: 12,
+                    fontFamily: 'monospace',
+                  ),
+                  textAlign: TextAlign.center,
                 ),
-                textAlign: TextAlign.center,
-              ),
               const SizedBox(height: 16),
 
               // Send airtime to this number
@@ -514,7 +548,6 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                 style: TextStyle(color: Colors.grey[600], fontSize: 12),
               ),
               const SizedBox(height: 16),
-
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -550,6 +583,7 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
     );
   }
 
+  // ── Build ─────────────────────────────────────────────────────────
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
@@ -594,7 +628,8 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                         ),
                         const SizedBox(height: 12),
                         Text(
-                          'Submit your request first — you\'ll receive the number to send airtime to after submission.',
+                          'Select your network, enter the airtime amount and the phone number '
+                          'you\'ll be sending from. You\'ll see exactly where to send the airtime.',
                           style: TextStyle(
                             color: Colors.blue[800],
                             fontSize: 13,
@@ -613,12 +648,12 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                         child: CircularProgressIndicator(),
                       ),
                     )
-                  else if (_networks.isEmpty)
+                  else if (_atcNetworks.isEmpty)
                     Center(
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 24),
                         child: TextButton.icon(
-                          onPressed: _loadNetworks,
+                          onPressed: _loadATCNetworks,
                           icon: const Icon(Icons.refresh),
                           label: const Text(
                             'Failed to load networks. Tap to retry',
@@ -627,19 +662,7 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                       ),
                     )
                   else
-                    NetworkSelector(
-                      selectedNetwork: _selectedNetwork,
-                      networks: _networks,
-                      showDiscount: false,
-                      onNetworkSelected: (airtimeNetwork) {
-                        setState(() {
-                          _selectedNetwork = airtimeNetwork.network;
-                          _apiRate = null;
-                          _networkMismatchWarning = null;
-                        });
-                        _checkNetworkMismatch();
-                      },
-                    ),
+                    _buildNetworkSelector(),
                   const SizedBox(height: 24),
 
                   // Phone Number + contact picker
@@ -687,28 +710,11 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                     ],
                   ),
 
-                  // Network mismatch warning
+                  // Mismatch warning
                   if (_networkMismatchWarning != null) ...[
                     const SizedBox(height: 6),
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Icon(
-                          Icons.warning_amber_rounded,
-                          color: Colors.orange[700],
-                          size: 16,
-                        ),
-                        const SizedBox(width: 6),
-                        Expanded(
-                          child: Text(
-                            '$_networkMismatchWarning This may still work if the number is ported.',
-                            style: TextStyle(
-                              color: Colors.orange[700],
-                              fontSize: 12,
-                            ),
-                          ),
-                        ),
-                      ],
+                    _buildWarningBox(
+                      '$_networkMismatchWarning This may still work if the number is ported.',
                     ),
                   ],
                   const SizedBox(height: 16),
@@ -738,8 +744,8 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // Conversion Display
-                  if (_selectedNetwork != null && _airtimeAmount > 0) ...[
+                  // Conversion preview
+                  if (_selectedATCNetwork != null && _airtimeAmount > 0) ...[
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
@@ -752,11 +758,9 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                       ),
                       child: Column(
                         children: [
-                          Text(
-                            _apiRate != null
-                                ? 'You Will Receive'
-                                : 'Est. You Will Receive',
-                            style: const TextStyle(
+                          const Text(
+                            'You Will Receive',
+                            style: TextStyle(
                               color: Colors.white70,
                               fontSize: 14,
                             ),
@@ -775,7 +779,7 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                           ),
                           const SizedBox(height: 4),
                           Text(
-                            'Conversion Rate: $_displayRate%${_apiRate == null ? ' (estimated)' : ''}',
+                            'Conversion Rate: $_displayRate%',
                             style: const TextStyle(
                               color: Colors.white70,
                               fontSize: 13,
@@ -787,7 +791,7 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                     const SizedBox(height: 24),
                   ],
 
-                  // Terms Checkbox
+                  // Terms
                   CheckboxListTile(
                     value: _acceptTerms,
                     onChanged: (value) =>
@@ -801,7 +805,7 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                   ),
                   const SizedBox(height: 24),
 
-                  // Submit Button
+                  // Submit
                   CustomButton(
                     text: 'Submit Request',
                     icon: Icons.send,
@@ -810,7 +814,7 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Important Notes
+                  // Important notes
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
@@ -840,11 +844,10 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          '- Submit your request first to get the number to send to\n'
                           '- Minimum conversion amount is N1,000\n'
                           '- Request will be reviewed by admin\n'
                           '- Cash credited after approval\n'
-                          '- Processing time: 5-30 minutes',
+                          '- Processing time: 5–30 minutes',
                           style: TextStyle(
                             color: Colors.orange[800],
                             fontSize: 12,

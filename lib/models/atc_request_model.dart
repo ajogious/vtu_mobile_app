@@ -1,3 +1,5 @@
+// lib/models/atc_request_model.dart
+
 enum ATCStatus { pending, approved, rejected }
 
 class ATCRequest {
@@ -59,5 +61,36 @@ class ATCRequest {
       case ATCStatus.rejected:
         return 'Rejected';
     }
+  }
+}
+
+// ── ATC Network (from GET /plans/a2c.php) ─────────────────────────────────────
+// Represents an available network for airtime-to-cash conversion.
+// Used on the request screen BEFORE submission to show rates and receive number.
+
+class ATCNetwork {
+  final String id;
+  final String network;
+  final double rate;
+  final String receivePhone;
+
+  ATCNetwork({
+    required this.id,
+    required this.network,
+    required this.rate,
+    required this.receivePhone,
+  });
+
+  /// True when the network is open for conversions.
+  /// A rate of 0 or missing receivePhone means the admin has disabled it.
+  bool get isAvailable => rate > 0 && receivePhone.isNotEmpty;
+
+  factory ATCNetwork.fromJson(Map<String, dynamic> json) {
+    return ATCNetwork(
+      id: json['id']?.toString() ?? '',
+      network: json['network']?.toString() ?? '',
+      rate: double.tryParse(json['rate']?.toString() ?? '0') ?? 0,
+      receivePhone: json['receive_phone']?.toString() ?? '',
+    );
   }
 }

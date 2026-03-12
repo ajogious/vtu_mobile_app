@@ -155,13 +155,27 @@ class Transaction {
         return TransactionType.atc;
       case 'referral':
       case 'referral_withdrawal':
+      case 'referralwithdrawal':
       case 'referral withdrawal':
+      case 'commission':
+      case 'commission_withdrawal':
+      case 'commissionwithdrawal':
+      case 'commission withdrawal':
+      case 'commission transfer':
+      case 'withdraw':
+      case 'withdrawal':
+      case 'wallet_withdrawal':
+      case 'wallet withdrawal':
+      case 'transfer':
         return TransactionType.referralWithdrawal;
       case 'referral_bonus':
+      case 'referralbonus':
       case 'referral bonus':
         return TransactionType.referralBonus;
       default:
-        return TransactionType.airtime;
+        // Unknown type — walletFunding is a safer neutral fallback
+        // (better than showing 'Airtime' for everything unknown)
+        return TransactionType.walletFunding;
     }
   }
 

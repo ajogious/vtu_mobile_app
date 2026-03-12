@@ -225,14 +225,26 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  // Check token validity explicitly
+  // Check token validity; silently refresh if expired but credentials exist.
   Future<bool> checkTokenValidity() async {
     final isValid = await _authService.isLoggedIn();
-    if (!isValid && _user != null) {
+    if (!isValid) {
+      // Attempt a silent refresh using the stored credentials before forcing
+      // the user back to the login screen.
+      final refreshed = await _authService.silentRefresh();
+      if (refreshed) {
+        // Reload the fresh user data that silentRefresh() saved to storage.
+        _user = _storage.getUser();
+        notifyListeners();
+        return true;
+      }
+
+      // Could not refresh — clear the stale user state.
       _user = null;
       notifyListeners();
+      return false;
     }
-    return isValid;
+    return true;
   }
 
   // Clear error

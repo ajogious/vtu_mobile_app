@@ -15,6 +15,7 @@ import 'providers/transaction_provider.dart';
 import 'providers/notification_provider.dart';
 import 'screens/auth/splash_screen.dart';
 import 'screens/lock/app_lock_screen.dart';
+import 'utils/ui_helpers.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -100,22 +101,20 @@ class _VTUAppState extends State<VTUApp> with WidgetsBindingObserver {
 
     switch (state) {
       case AppLifecycleState.paused:
-        // Only record background time on actual pause (not inactive).
-        // `inactive` fires when native dialogs (like biometric prompts) appear —
-        // treating it as background caused an immediate re-lock after the
-        // biometric prompt closed.
         lockProvider.onAppBackground();
         break;
       case AppLifecycleState.inactive:
-        // Do nothing — inactive is fired during biometric prompts, phone calls,
-        // notification banners, etc. We intentionally don't lock here.
         break;
       case AppLifecycleState.resumed:
-        // Only lock when a user session is active — logged-out users on the
-        // LoginScreen should never see the AppLockScreen.
         final authProvider = context.read<AuthProvider>();
         if (authProvider.isAuthenticated) {
           lockProvider.onAppForeground();
+
+          authProvider.checkTokenValidity().then((isValid) {
+            if (!isValid) {
+              authProvider.logout();
+            }
+          });
         }
         break;
       default:
@@ -133,14 +132,10 @@ class _VTUAppState extends State<VTUApp> with WidgetsBindingObserver {
           theme: ThemeConfig.lightTheme,
           darkTheme: ThemeConfig.darkTheme,
           themeMode: themeProvider.themeMode,
+          scaffoldMessengerKey: rootScaffoldMessengerKey,
           builder: (context, child) {
             return Stack(
-              children: [
-                if (child != null) child,
-                // FIX: extracted into its own widget so AppLockScreen
-                // is never rebuilt while the user is typing
-                _AppLockOverlay(),
-              ],
+              children: [if (child != null) child, _AppLockOverlay()],
             );
           },
           home: const SplashScreen(),
@@ -150,8 +145,6 @@ class _VTUAppState extends State<VTUApp> with WidgetsBindingObserver {
   }
 }
 
-/// Separate widget so Consumer<AppLockProvider> rebuilds only this,
-/// never AppLockScreen itself while the user is typing their password.
 class _AppLockOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -160,10 +153,13 @@ class _AppLockOverlay extends StatelessWidget {
     if (!isLocked) return const SizedBox.shrink();
 
     return Positioned.fill(
-      child: AppLockScreen(
-        onUnlocked: () {
-          context.read<AppLockProvider>().unlock();
-        },
+      child: Material(
+        color: Theme.of(context).scaffoldBackgroundColor,
+        child: AppLockScreen(
+          onUnlocked: () {
+            context.read<AppLockProvider>().unlock();
+          },
+        ),
       ),
     );
   }

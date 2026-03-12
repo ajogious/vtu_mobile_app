@@ -260,6 +260,7 @@ Need help? Contact us at ${AppConstants.supportEmail}
               // ── Earnings Summary ────────────────────────────────────────
               Consumer<ReferralProvider>(
                 builder: (context, provider, child) {
+                  // Full-screen spinner only on very first load (no cache)
                   if (provider.isLoading) {
                     return const Center(
                       child: Padding(
@@ -296,9 +297,15 @@ Need help? Contact us at ${AppConstants.supportEmail}
                     );
                   }
 
+                  // Background refresh: uses same column below, with thin bar at top
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
+                      // Thin progress bar during background refresh (data visible)
+                      if (provider.isRefreshing)
+                        const LinearProgressIndicator(minHeight: 2),
+                      if (provider.isRefreshing) const SizedBox(height: 8),
+
                       const Text(
                         'Earnings Summary',
                         style: TextStyle(
@@ -376,14 +383,17 @@ Need help? Contact us at ${AppConstants.supportEmail}
                         text: 'Withdraw Earnings',
                         icon: Icons.south_west,
                         onPressed: provider.availableBalance >= 1
-                            ? () {
-                                Navigator.push(
+                            ? () async {
+                                final didWithdraw = await Navigator.push<bool>(
                                   context,
                                   MaterialPageRoute(
                                     builder: (_) =>
                                         const WithdrawEarningsScreen(),
                                   ),
                                 );
+                                if (didWithdraw == true && mounted) {
+                                  _loadReferralData();
+                                }
                               }
                             : null,
                       ),

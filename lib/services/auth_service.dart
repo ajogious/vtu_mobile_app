@@ -80,7 +80,13 @@ class AuthService {
     await _storage.clearAuth();
   }
 
-  // Check if logged in and token is not expired
+  // Check if logged in and token is not expired.
+  //
+  // The server returns `expires_at` as "YYYY-MM-DD HH:MM:SS" with no timezone
+  // suffix (implicitly UTC on the server). We always normalise it to UTC before
+  // comparing so that devices in non-UTC timezones don't get a false "expired"
+  // result. A 7-day early-expiry buffer is applied so the session is refreshed
+  // proactively before the user ever hits the real expiry moment.
   Future<bool> isLoggedIn() async {
     String? token = await _storage.getToken();
     if (token == null || token.isEmpty) return false;
@@ -88,19 +94,56 @@ class AuthService {
     String? expiryStr = _storage.getTokenExpiry();
     if (expiryStr != null && expiryStr.isNotEmpty) {
       try {
-        final expiryDate = DateTime.parse(expiryStr);
-        if (DateTime.now().isAfter(expiryDate)) {
-          // Token expired, clear auth
+        // Normalise "YYYY-MM-DD HH:MM:SS" → ISO-8601 UTC so DateTime.parse
+        // always treats it as UTC regardless of the device locale.
+        final normalised =
+            expiryStr.replaceAll(' ', 'T') +
+            (expiryStr.contains('Z') || expiryStr.contains('+') ? '' : 'Z');
+        final expiryDate = DateTime.parse(normalised).toLocal();
+
+        // Apply a 7-day proactive buffer so we refresh sessions before they
+        // actually expire, avoiding last-second log-outs.
+        final effectiveExpiry = expiryDate.subtract(const Duration(days: 7));
+
+        if (DateTime.now().isAfter(effectiveExpiry)) {
+          // Token is expired (or within the 7-day buffer). Clear auth.
           await _storage.clearAuth();
           return false;
         }
-      } catch (e) {
-        // If parsing fails, assume expired for safety
-        return false;
+      } catch (_) {
+        // Parsing failed — the expiry string is malformed or the format
+        // changed. Trust the stored token and let the server respond with
+        // a 401 if it's actually invalid. Do NOT silently log the user out.
+        return true;
       }
     }
 
     return true;
+  }
+
+  /// Silently re-issues a fresh token by logging in with the credentials
+  /// that are already saved in secure storage (used by biometrics).
+  ///
+  /// Returns `true` if a new token was successfully obtained and stored.
+  /// Returns `false` if credentials are missing or the request failed
+  /// (caller should fall back to showing the login screen).
+  Future<bool> silentRefresh() async {
+    try {
+      final username = _storage.getLastUsername();
+      final password = await _storage.getPassword();
+
+      if (username == null ||
+          username.isEmpty ||
+          password == null ||
+          password.isEmpty) {
+        return false;
+      }
+
+      final result = await login(username, password);
+      return result.success;
+    } catch (_) {
+      return false;
+    }
   }
 
   // Get current user from storage

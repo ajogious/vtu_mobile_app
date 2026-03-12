@@ -43,6 +43,7 @@ class ApiConfig {
   static const String buyDataEndpoint = '/buy/data.php';
   static const String buyAirtimeEndpoint = '/buy/airtime.php';
   static const String buyCableEndpoint = '/buy/cable.php';
+  static const String cableValidateEndpoint = '/buy/cable_validate.php';
   static const String buyElectricEndpoint = '/buy/electric.php';
   static const String buyExamEndpoint = '/buy/exam.php';
   static const String buyDatacardEndpoint = '/buy/datacard.php';
@@ -58,6 +59,9 @@ class ApiConfig {
 
   // ATC endpoint
   static const String atcRequestEndpoint = '/airtime_to_cash/request.php';
+  static const String atcNetworksEndpoint = '/plans/a2c.php'; // ← add this
+
+  // Paystack
 
   // Headers
   static Map<String, String> headers({String? token}) {

@@ -1,11 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
-import '../../services/api/real_api_service.dart';
 import '../../services/biometric_service.dart';
 import '../../services/storage_service.dart';
 import '../../utils/ui_helpers.dart';
 
+/// A dialog that collects the user's transaction PIN.
+///
+/// This dialog does NOT pre-verify the PIN locally or via API.
+/// The PIN is returned to the caller and validated by the server
+/// during the actual purchase/withdrawal request. If the PIN is
+/// wrong, the server returns an error which the caller shows to
+/// the user — same as any other API error.
 class PinVerificationDialog extends StatefulWidget {
   final String? title;
   final String? subtitle;
@@ -53,8 +59,7 @@ class _PinVerificationDialogState extends State<PinVerificationDialog> {
     final canAuth = await BiometricService.canAuthenticate();
     if (!canAuth) return;
 
-    // Check if we actually have the PIN saved locally.
-    // Otherwise we'd authorize via biometrics but submit an empty PIN.
+    // Only offer biometrics if we have the PIN saved locally to forward.
     final hasLocalPin = await StorageService().hasPin();
     if (!hasLocalPin) return;
 
@@ -69,55 +74,44 @@ class _PinVerificationDialogState extends State<PinVerificationDialog> {
       _biometricIcon = icon;
     });
 
-    // Auto-trigger biometric
+    // Auto-trigger biometric prompt
     _tryBiometric();
   }
 
   Future<void> _tryBiometric() async {
     if (!_biometricAvailable) return;
 
-    setState(() {
-      _isLoading = true;
-    });
+    setState(() => _isLoading = true);
 
     final result = await BiometricService.authenticateForTransaction(
       transactionDescription: widget.subtitle ?? 'Confirm transaction',
     );
 
     if (!mounted) return;
-
-    setState(() {
-      _isLoading = false;
-    });
+    setState(() => _isLoading = false);
 
     switch (result) {
       case BiometricResult.success:
-        // Retrieve the saved PIN to forward to the API
         final storedPin = await StorageService().getPin() ?? '';
-        if (mounted) Navigator.pop(context, storedPin);
+        if (mounted && storedPin.isNotEmpty) {
+          Navigator.pop(context, storedPin);
+        }
         break;
       case BiometricResult.cancelled:
-        // User cancelled, let them use PIN
-        break;
+        break; // Let user type PIN
       case BiometricResult.lockedOut:
         setState(() {
           _errorMessage = 'Biometric locked. Please use PIN.';
         });
         break;
-      case BiometricResult.notAvailable:
-      case BiometricResult.notEnrolled:
-        setState(() {
-          _biometricAvailable = false;
-        });
-        break;
       default:
         setState(() {
-          _errorMessage = 'Biometric failed. Please use PIN.';
+          _biometricAvailable = false;
         });
     }
   }
 
-  Future<void> _verifyPin() async {
+  void _submitPin() {
     final pin = _pinController.text.trim();
 
     if (pin.length < 5) {
@@ -127,60 +121,8 @@ class _PinVerificationDialogState extends State<PinVerificationDialog> {
       return;
     }
 
-    setState(() {
-      _isLoading = true;
-      _errorMessage = '';
-    });
-
-    await Future.delayed(const Duration(milliseconds: 300));
-
-    if (!mounted) return;
-
-    final storage = StorageService();
-    final hasLocalPin = await storage.hasPin();
-
-    if (hasLocalPin) {
-      // Fast local check — compare against stored PIN
-      final isValid = await storage.verifyPin(pin);
-      setState(() {
-        _isLoading = false;
-      });
-      if (isValid) {
-        Navigator.pop(context, pin);
-      } else {
-        setState(() {
-          _errorMessage = 'Incorrect PIN. Please try again.';
-          _pinController.clear();
-        });
-        _focusNode.requestFocus();
-      }
-    } else {
-      // No local PIN — user set PIN on server but not cached locally.
-      // E.g., fresh login trying to enable biometrics.
-      // Fallback to our change-pin hack to verify against the server!
-
-      // Need to grab the actual API service. We can safely reinstantiate it since it has no state.
-      final api = RealApiService();
-      final result = await api.verifyPinAPI(pin: pin);
-
-      setState(() {
-        _isLoading = false;
-      });
-
-      if (result.success && result.data == true) {
-        // Cache the PIN locally so future verifications are instant
-        // and don't depend on the API hack again.
-        await storage.savePin(pin);
-        if (!mounted) return;
-        Navigator.pop(context, pin);
-      } else {
-        setState(() {
-          _errorMessage = result.error ?? 'Incorrect PIN. Please try again.';
-          _pinController.clear();
-        });
-        _focusNode.requestFocus();
-      }
-    }
+    // Return the PIN to the caller — server will validate it.
+    Navigator.pop(context, pin);
   }
 
   @override
@@ -260,7 +202,7 @@ class _PinVerificationDialogState extends State<PinVerificationDialog> {
                   const SizedBox(height: 16),
                 ],
 
-                // Loading indicator
+                // Loading indicator (biometric only)
                 if (_isLoading) ...[
                   const CircularProgressIndicator(),
                   const SizedBox(height: 16),
@@ -296,15 +238,13 @@ class _PinVerificationDialogState extends State<PinVerificationDialog> {
                       ),
                     ),
                     style: const TextStyle(fontSize: 24, letterSpacing: 8),
-                    onSubmitted: (_) => _verifyPin(),
+                    onSubmitted: (_) => _submitPin(),
                     onChanged: (value) {
                       if (_errorMessage.isNotEmpty) {
-                        setState(() {
-                          _errorMessage = '';
-                        });
+                        setState(() => _errorMessage = '');
                       }
                       if (value.length == 5) {
-                        _verifyPin();
+                        _submitPin();
                       }
                     },
                   ),
@@ -319,20 +259,21 @@ class _PinVerificationDialogState extends State<PinVerificationDialog> {
             child: const Text('Cancel'),
           ),
           if (!_isLoading)
-            ElevatedButton(onPressed: _verifyPin, child: const Text('Verify')),
+            ElevatedButton(onPressed: _submitPin, child: const Text('Confirm')),
         ],
       ),
     );
   }
 }
 
-/// Helper function to show PIN verification dialog.
-/// Returns the verified PIN string on success, or null on cancel/failure.
+/// Shows a PIN collection dialog.
 ///
-/// [serverPinSet] — pass `true` when the server has confirmed the user's PIN
-/// is set (e.g. `user.pinSet == 'YES'`). This bypasses the local-storage
-/// gate so users who set their PIN on another device (or after a fresh install)
-/// are not blocked.
+/// Returns the PIN string the user typed, or null if they cancelled.
+/// The PIN is NOT pre-verified here — it is sent to the server with the
+/// purchase/withdrawal request, and the server validates it.
+///
+/// [serverPinSet] — if false AND no local PIN cached, shows a prompt to
+/// set a PIN first so the user knows they need to configure one.
 Future<String?> showPinVerificationDialog(
   BuildContext context, {
   String? title,
@@ -343,16 +284,20 @@ Future<String?> showPinVerificationDialog(
   final storage = StorageService();
   final localPinExists = await storage.hasPin();
 
-  // Block only when we have no local PIN AND the server also says no PIN
+  // Only block if server also says no PIN is set — avoids false negatives
+  // on fresh installs where the user's PIN exists on the server but hasn't
+  // been cached locally yet.
   if (!localPinExists && !serverPinSet) {
+    if (!context.mounted) return null;
     UiHelpers.showSnackBar(
       context,
-      'Please set a PIN first in Settings',
+      'Please set a transaction PIN first in Settings → Security',
       isError: true,
     );
     return null;
   }
 
+  if (!context.mounted) return null;
   final result = await showDialog<String?>(
     context: context,
     barrierDismissible: false,

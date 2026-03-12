@@ -101,10 +101,10 @@ class _WithdrawEarningsScreenState extends State<WithdrawEarningsScreen> {
       // Fetch the newest referral data without blocking
       referralProvider.fetchReferralData();
 
-      // Create transaction
+      // Fix: use referralWithdrawal not referralBonus
       final transaction = Transaction(
         id: 'REF${DateTime.now().millisecondsSinceEpoch}',
-        type: TransactionType.referralBonus,
+        type: TransactionType.referralWithdrawal,
         network: 'Referral Withdrawal',
         amount: amount,
         status: TransactionStatus.success,
@@ -120,18 +120,20 @@ class _WithdrawEarningsScreenState extends State<WithdrawEarningsScreen> {
 
       context.read<TransactionProvider>().addTransaction(transaction);
 
-      // Fire notification
+      // Fire wallet notification
       await NotificationService.walletCredited(amount, 'Referral Earnings');
 
-      // Show success
       if (!mounted) return;
 
+      // Show green success snackbar
       UiHelpers.showSnackBar(
         context,
         '₦${NumberFormat('#,##0.00').format(amount)} transferred to your wallet',
+        isError: false,
       );
 
-      Navigator.pop(context);
+      // Pop back and signal referral screen to refresh
+      Navigator.pop(context, true);
     } else {
       final errorMessage =
           referralProvider.error ?? 'Withdrawal failed. Please try again.';

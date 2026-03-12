@@ -1,6 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+// ✅ Global key attached to MaterialApp's scaffoldMessengerKey.
+// This completely decouples SnackBars from any individual screen's
+// context/lifecycle — no more "deactivated widget" crashes.
+final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey =
+    GlobalKey<ScaffoldMessengerState>();
+
 class UiHelpers {
   // Dismiss keyboard
   static void dismissKeyboard(BuildContext context) {
@@ -8,13 +14,21 @@ class UiHelpers {
   }
 
   // Show snackbar
+  // ✅ FIX: Uses rootScaffoldMessengerKey instead of context-based
+  // ScaffoldMessenger. The crash was happening because the ScaffoldMessenger
+  // tied to the screen context was being accessed after the screen disposed.
+  // The global key lives at the MaterialApp level and is always alive.
   static void showSnackBar(
     BuildContext context,
     String message, {
     bool isError = false,
     Duration duration = const Duration(seconds: 3),
   }) {
-    ScaffoldMessenger.of(context).showSnackBar(
+    final messenger = rootScaffoldMessengerKey.currentState;
+    if (messenger == null) return;
+
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: isError ? Colors.red : Colors.green,
@@ -27,6 +41,7 @@ class UiHelpers {
 
   // Show loading dialog
   static void showLoadingDialog(BuildContext context, String message) {
+    if (!context.mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -47,6 +62,7 @@ class UiHelpers {
 
   // Hide loading dialog
   static void hideLoadingDialog(BuildContext context) {
+    if (!context.mounted) return;
     Navigator.of(context, rootNavigator: true).pop();
   }
 
@@ -56,6 +72,7 @@ class UiHelpers {
     String title,
     String message,
   ) {
+    if (!context.mounted) return;
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -77,6 +94,7 @@ class UiHelpers {
     String title,
     String message,
   ) async {
+    if (!context.mounted) return false;
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(

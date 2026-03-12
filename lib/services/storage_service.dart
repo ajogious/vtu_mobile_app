@@ -299,4 +299,29 @@ class StorageService {
     await saveThemeMode(isDark);
     await setFirstLaunch(isFirst);
   }
+
+  // ========== REFERRAL CACHE ==========
+
+  static const String _referralCacheKey = 'referral_cache';
+
+  /// Save raw referral API response JSON for fast reload on next screen open.
+  Future<void> saveReferralCache(Map<String, dynamic> data) async {
+    await _prefs.setString(_referralCacheKey, jsonEncode(data));
+  }
+
+  /// Return cached referral data, or null if not cached yet.
+  Map<String, dynamic>? getReferralCache() {
+    final raw = _prefs.getString(_referralCacheKey);
+    if (raw == null) return null;
+    try {
+      return jsonDecode(raw) as Map<String, dynamic>;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Clear referral cache on logout.
+  Future<void> clearReferralCache() async {
+    await _prefs.remove(_referralCacheKey);
+  }
 }
