@@ -720,7 +720,36 @@ class RealApiService implements ApiService {
     required String meterNumber,
     required String meterType,
   }) async {
-    return ApiResult.failure('Meter validation endpoint not yet available');
+    try {
+      final response = await _dio.post(
+        ApiConfig.electricValidateEndpoint,
+        data: {
+          'company': disco,
+          'meterno': meterNumber,
+          'meter_type': meterType
+              .toUpperCase(), // API expects PREPAID / POSTPAID
+        },
+      );
+
+      final responseData = response.data;
+
+      if (responseData['ok'] == true) {
+        final data = responseData['data'];
+        return ApiResult.success({
+          'customer_name': data['customer_name']?.toString() ?? '',
+          'status': data['status']?.toString() ?? 'success',
+        });
+      }
+
+      return ApiResult.failure(
+        responseData['message']?.toString() ??
+            'Failed to validate meter. Please check the details and try again.',
+      );
+    } on DioException catch (e) {
+      return ApiResult.failure(_handleDioError(e));
+    } catch (e) {
+      return ApiResult.failure(e.toString());
+    }
   }
 
   @override

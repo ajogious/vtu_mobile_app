@@ -289,6 +289,14 @@ class StorageService {
     bool isDark = getThemeMode();
     bool isFirst = isFirstLaunch();
 
+    // Preserve app-lock credentials — the lock screen password and biometric
+    // setting belong to the device, not to the user session. Clearing them on
+    // logout means `getPassword()` returns null, so the correct password is
+    // always rejected on the next app open.
+    final savedPassword = await getPassword();
+    final biometricEnabled = getBiometricEnabled();
+    final autoLockDuration = getAutoLockDuration();
+
     // Wipe absolutely everything else
     if (!kIsWeb && _secureStorage != null) {
       await _secureStorage!.deleteAll();
@@ -298,6 +306,13 @@ class StorageService {
     // Restore device settings
     await saveThemeMode(isDark);
     await setFirstLaunch(isFirst);
+
+    // Restore app-lock credentials
+    if (savedPassword != null) {
+      await savePassword(savedPassword);
+    }
+    await saveBiometricEnabled(biometricEnabled);
+    await saveAutoLockDuration(autoLockDuration);
   }
 
   // ========== REFERRAL CACHE ==========
