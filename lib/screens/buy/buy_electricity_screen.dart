@@ -397,6 +397,7 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
       meter: meter,
       amount: amount,
       pincode: verifiedPin,
+      meterType: _selectedMeterType!,
     );
 
     if (!mounted) return;

@@ -4,14 +4,12 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/wallet_provider.dart';
-import '../../providers/transaction_provider.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_textfield.dart';
 import '../../utils/ui_helpers.dart';
 import '../../config/app_constants.dart';
 import '../../models/virtual_account_model.dart';
-import '../../models/transaction_model.dart';
-import '../../services/notification_service.dart';
+import 'paystack_webview_screen.dart';
 
 class FundWalletScreen extends StatefulWidget {
   const FundWalletScreen({super.key});
@@ -107,52 +105,98 @@ class _FundWalletScreenState extends State<FundWalletScreen> {
       _isProcessingPayment = true;
     });
 
-    // Simulate payment processing
-    await Future.delayed(const Duration(seconds: 2));
+    final authProvider = context.read<AuthProvider>();
+    final apiService = authProvider.authService.api;
+
+    // 1. Initialize Payment
+    final initResult = await apiService.initializePaystackPayment(amount: amount);
 
     if (!mounted) return;
 
+    if (!initResult.success || initResult.data == null) {
+      setState(() {
+        _isProcessingPayment = false;
+      });
+      UiHelpers.showErrorSnackBar(
+        context,
+        initResult.error ?? 'Failed to initialize payment',
+      );
+      return;
+    }
+
+    final data = initResult.data!;
+    final authorizationUrl = data['authorization_url'];
+    final reference = data['reference'];
+
+    if (authorizationUrl == null || reference == null) {
+       setState(() {
+        _isProcessingPayment = false;
+      });
+      UiHelpers.showErrorSnackBar(
+        context,
+        'Invalid payment session from server',
+      );
+      return;
+    }
+    
     setState(() {
       _isProcessingPayment = false;
     });
 
-    // Show mock success dialog
-    final confirmed = await _showPaymentSuccessDialog(amount);
+    // 2. Open Webview
+    final successUrl = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => PaystackWebviewScreen(
+          authorizationUrl: authorizationUrl,
+          reference: reference,
+        ),
+      ),
+    );
 
-    if (confirmed == true && mounted) {
-      // Update wallet balance
-      final walletProvider = context.read<WalletProvider>();
-      walletProvider.addBalance(amount);
+    if (successUrl != true || !mounted) {
+      UiHelpers.showSnackBar(context, 'Payment cancelled');
+      return;
+    }
 
-      // Create transaction
-      final transaction = Transaction(
-        id: 'TXN${DateTime.now().millisecondsSinceEpoch}',
-        type: TransactionType.walletFunding,
-        network: 'Paystack',
-        amount: amount,
-        status: TransactionStatus.success,
-        createdAt: DateTime.now(),
-        beneficiary: 'Wallet',
-        reference: 'PAY${DateTime.now().millisecondsSinceEpoch}',
-        balanceBefore: walletProvider.balance - amount,
-        balanceAfter: walletProvider.balance,
-        metadata: {'payment_method': 'card', 'gateway': 'paystack'},
-      );
+    setState(() {
+      _isProcessingPayment = true;
+    });
 
-      // Add to transaction history
-      context.read<TransactionProvider>().addTransaction(transaction);
+    // 3. Verify Payment
+    final verifyResult = await apiService.verifyPaystackPayment(reference: reference);
 
-      // Fire notification
-      await NotificationService.walletCredited(amount, 'Card Payment');
+    if (!mounted) {
+      return;
+    }
+    
+    setState(() {
+      _isProcessingPayment = false;
+    });
 
-      // Show success message
-      UiHelpers.showSnackBar(
+    if (verifyResult.success) {
+      // Show mock success dialog (or real one depending on the response data)
+      final confirmed = await _showPaymentSuccessDialog(amount);
+
+      if (confirmed == true && mounted) {
+        // Update wallet balance, Ideally we might fetch user's new balance from the server here
+        // But for now we just add locally just like before
+        final walletProvider = context.read<WalletProvider>();
+        walletProvider.fetchBalance(forceRefresh: true);
+
+        // Show success message
+        UiHelpers.showSnackBar(
+          context,
+          'Wallet funded successfully',
+        );
+
+        // Go back to previous screen
+        Navigator.pop(context);
+      }
+    } else {
+       UiHelpers.showErrorSnackBar(
         context,
-        'Wallet funded successfully with ₦${NumberFormat('#,##0.00').format(amount)}',
+        verifyResult.error ?? 'Payment verification failed',
       );
-
-      // Go back to previous screen
-      Navigator.pop(context);
     }
   }
 

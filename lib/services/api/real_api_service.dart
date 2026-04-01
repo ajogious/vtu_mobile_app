@@ -534,9 +534,53 @@ class RealApiService implements ApiService {
   Future<ApiResult<Map<String, dynamic>>> initializePaystackPayment({
     required double amount,
   }) async {
-    return ApiResult.failure(
-      'Payment initialization endpoint not yet available',
-    );
+    try {
+      final response = await _dio.post(
+        ApiConfig.paystackInitEndpoint,
+        data: {'amount': amount},
+      );
+
+      final responseData = response.data;
+
+      if (responseData['ok'] == true) {
+        return ApiResult.success(responseData['data']);
+      }
+
+      return ApiResult.failure(
+        responseData['message'] ?? 'Failed to initialize payment',
+      );
+    } on DioException catch (e) {
+      return ApiResult.failure(_handleDioError(e));
+    } catch (e) {
+      return ApiResult.failure(e.toString());
+    }
+  }
+
+  @override
+  Future<ApiResult<Map<String, dynamic>>> verifyPaystackPayment({
+    required String reference,
+  }) async {
+    try {
+      final response = await _dio.get(
+        ApiConfig.paystackCallbackEndpoint,
+        queryParameters: {'reference': reference},
+      );
+
+      final responseData = response.data;
+
+      if (responseData['ok'] == true) {
+        // Data might be a list or map, we just need to return success
+        return ApiResult.success(responseData);
+      }
+
+      return ApiResult.failure(
+        responseData['message'] ?? 'Payment verification failed',
+      );
+    } on DioException catch (e) {
+      return ApiResult.failure(_handleDioError(e));
+    } catch (e) {
+      return ApiResult.failure(e.toString());
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
@@ -975,13 +1019,16 @@ class RealApiService implements ApiService {
     required String meter,
     required double amount,
     required String pincode,
+    required String meterType,
   }) async {
     try {
       final response = await _dio.post(
         ApiConfig.buyElectricEndpoint,
         data: {
-          'disco': disco,
-          'meter': meter,
+          'network_code': disco,
+          'number': meter,
+          'type': 'electricity',
+          'meter_type': meterType.toUpperCase(),
           'amount': amount,
           'pincode': pincode,
         },

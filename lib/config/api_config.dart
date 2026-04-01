@@ -63,7 +63,8 @@ class ApiConfig {
   static const String atcNetworksEndpoint = '/plans/a2c.php'; // ← add this
 
   // Paystack
-
+  static const String paystackInitEndpoint = '/paystack/init.php';
+  static const String paystackCallbackEndpoint = '/paystack/paystack_callback.php';
   // Headers
   static Map<String, String> headers({String? token}) {
     final headers = {

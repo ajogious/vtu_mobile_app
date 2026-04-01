@@ -39,6 +39,15 @@ class UiHelpers {
     );
   }
 
+  // Show error snackbar
+  static void showErrorSnackBar(
+    BuildContext context,
+    String message, {
+    Duration duration = const Duration(seconds: 3),
+  }) {
+    showSnackBar(context, message, isError: true, duration: duration);
+  }
+
   // Show loading dialog
   static void showLoadingDialog(BuildContext context, String message) {
     if (!context.mounted) return;

@@ -86,6 +86,10 @@ abstract class ApiService {
     required double amount,
   });
 
+  Future<ApiResult<Map<String, dynamic>>> verifyPaystackPayment({
+    required String reference,
+  });
+
   // ========== PLANS ==========
 
   Future<ApiResult<List<DataPlan>>> getDataPlans({String? network});
@@ -142,6 +146,7 @@ abstract class ApiService {
     required String meter,
     required double amount,
     required String pincode,
+    required String meterType,
   });
 
   Future<ApiResult<Map<String, dynamic>>> buyExamPin({
