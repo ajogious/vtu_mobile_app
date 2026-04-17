@@ -194,6 +194,7 @@ abstract class ApiService {
     required String paymentMethod, // 'bank' or 'wallet'
     String? accountNumber,
     String? bankName,
+    String? accountName,
   });
 
   Future<ApiResult<List<ATCRequest>>> getATCHistory();

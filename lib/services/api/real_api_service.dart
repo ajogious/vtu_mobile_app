@@ -1337,6 +1337,7 @@ class RealApiService implements ApiService {
     required String paymentMethod,
     String? accountNumber,
     String? bankName,
+    String? accountName,
   }) async {
     try {
       final Map<String, dynamic> body = {
@@ -1347,6 +1348,9 @@ class RealApiService implements ApiService {
       };
 
       if (paymentMethod == 'bank') {
+        if (accountName != null && accountName.isNotEmpty) {
+          body['account_name'] = accountName;
+        }
         if (accountNumber != null && accountNumber.isNotEmpty) {
           body['account_number'] = accountNumber;
         }

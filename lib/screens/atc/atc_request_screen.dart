@@ -31,6 +31,7 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
   bool _isProcessing = false;
   String? _networkMismatchWarning;
   String _paymentMethod = 'wallet'; // 'wallet' or 'bank'
+  String _accountName = ''; // auto-filled from user profile
 
   List<ATCNetwork> _atcNetworks = [];
   bool _isLoadingNetworks = true;
@@ -51,6 +52,13 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
   void initState() {
     super.initState();
     _loadATCNetworks();
+    // Pre-fill account name from user profile
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final user = context.read<AuthProvider>().user;
+      if (user != null) {
+        setState(() => _accountName = user.fullName);
+      }
+    });
   }
 
   @override
@@ -285,13 +293,71 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
     return Column(
       children: [
         const SizedBox(height: 16),
+        // Read-only Account Name (pre-filled from user profile)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          decoration: BoxDecoration(
+            color: Colors.grey[100],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: Colors.grey[300]!),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.person_outline, color: Colors.grey[600], size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Account Name',
+                      style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      _accountName.isNotEmpty ? _accountName : 'Loading...',
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Tooltip(
+                message: 'Must match your registered name',
+                child: Icon(Icons.lock_outline, size: 16, color: Colors.grey[500]),
+              ),
+            ],
+          ),
+        ),
+        // Info note below account name
+        Padding(
+          padding: const EdgeInsets.only(top: 6, left: 4),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline, size: 13, color: Colors.blue[600]),
+              const SizedBox(width: 4),
+              Expanded(
+                child: Text(
+                  'Account name must match your registered name for payment to succeed.',
+                  style: TextStyle(fontSize: 11, color: Colors.blue[700]),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 16),
         CustomTextField(
           controller: _accountNumberController,
           labelText: 'Account Number',
           hintText: 'Enter your bank account number',
           prefixIcon: Icons.credit_card,
           keyboardType: TextInputType.number,
-          inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
+          inputFormatters: [
+            FilteringTextInputFormatter.digitsOnly,
+            LengthLimitingTextInputFormatter(10),
+          ],
           validator: (v) {
             if (_paymentMethod != 'bank') return null;
             if (v == null || v.trim().isEmpty) return 'Please enter account number';
@@ -356,7 +422,8 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                   'Payment Method',
                   _paymentMethod == 'bank' ? 'Bank Account' : 'Wallet',
                 ),
-                if (_paymentMethod == 'bank') ...[ 
+                if (_paymentMethod == 'bank') ...[
+                  _buildConfirmRow('Account Name', _accountName),
                   _buildConfirmRow('Account Number', _accountNumberController.text.trim()),
                   _buildConfirmRow('Bank Name', _bankNameController.text.trim()),
                 ],
@@ -497,6 +564,7 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
         paymentMethod: _paymentMethod,
         accountNumber: _paymentMethod == 'bank' ? _accountNumberController.text.trim() : null,
         bankName: _paymentMethod == 'bank' ? _bankNameController.text.trim() : null,
+        accountName: _paymentMethod == 'bank' && _accountName.isNotEmpty ? _accountName : null,
       );
 
       if (!mounted) return;
