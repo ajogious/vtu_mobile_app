@@ -10,6 +10,7 @@ import '../../models/virtual_account_model.dart';
 import '../../utils/ui_helpers.dart';
 import 'kyc_screen.dart';
 import 'fund_wallet_screen.dart';
+import '../transactions/transaction_list_screen.dart';
 
 class WalletScreen extends StatefulWidget {
   const WalletScreen({super.key});
@@ -129,9 +130,11 @@ class _WalletScreenState extends State<WalletScreen> {
                       icon: Icons.receipt_long,
                       isOutlined: true,
                       onPressed: () {
-                        UiHelpers.showSnackBar(
+                        Navigator.push(
                           context,
-                          'Transaction screen - Coming in Day 17',
+                          MaterialPageRoute(
+                            builder: (_) => const TransactionListScreen(),
+                          ),
                         );
                       },
                     ),

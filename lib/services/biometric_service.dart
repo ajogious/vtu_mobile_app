@@ -103,24 +103,19 @@ class BiometricService {
     bool sensitiveTransaction = false,
   }) async {
     try {
-      print('🔐 [Biometric] Starting authentication...');
 
       // Check if device supports biometrics
       final canAuth = await canAuthenticate();
-      print('🔐 [Biometric] canAuthenticate: $canAuth');
       if (!canAuth) {
         return BiometricResult.notAvailable;
       }
 
       // Check if biometrics are enrolled
       final biometrics = await getAvailableBiometrics();
-      print('🔐 [Biometric] Available biometrics: $biometrics');
       if (biometrics.isEmpty) {
         return BiometricResult.notEnrolled;
       }
 
-      print('🔐 [Biometric] Calling authenticate()...');
-      // Authenticate - using old API style for compatibility
       // ignore: deprecated_member_use
       final authenticated = await _auth.authenticate(
         localizedReason: reason,
@@ -130,11 +125,8 @@ class BiometricService {
         sensitiveTransaction: sensitiveTransaction,
       );
 
-      print('🔐 [Biometric] Authentication result: $authenticated');
       return authenticated ? BiometricResult.success : BiometricResult.failed;
     } on PlatformException catch (e) {
-      print('🔐 [Biometric] PlatformException: ${e.code} - ${e.message}');
-      // Handle error codes as strings (works across all versions)
       final code = e.code.toLowerCase();
 
       if (code.contains('notavailable') || code.contains('not_available')) {
@@ -153,27 +145,26 @@ class BiometricService {
 
       return BiometricResult.failed;
     } catch (e) {
-      print('🔐 [Biometric] Generic error: $e');
       return BiometricResult.failed;
     }
   }
 
-  /// Authenticate for app unlock
+  /// Authenticate for app unlock — biometric only (no pattern/PIN fallback)
   static Future<BiometricResult> authenticateForAppUnlock() async {
     return authenticate(
-      reason: 'Unlock VTU App',
-      biometricOnly: false,
+      reason: 'Use your fingerprint or face to unlock the app',
+      biometricOnly: true,
       sensitiveTransaction: false,
     );
   }
 
-  /// Authenticate for transaction
+  /// Authenticate for transaction — biometric only (no pattern/PIN fallback)
   static Future<BiometricResult> authenticateForTransaction({
     required String transactionDescription,
   }) async {
     return authenticate(
-      reason: 'Confirm: $transactionDescription',
-      biometricOnly: false,
+      reason: 'Use your fingerprint or face to confirm: $transactionDescription',
+      biometricOnly: true,
       sensitiveTransaction: true,
     );
   }

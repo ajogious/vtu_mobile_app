@@ -148,41 +148,53 @@ class NotificationScreen extends StatelessWidget {
   }
 
   Widget _buildIcon(String title) {
-    IconData icon;
-    Color color;
+    Color accentColor;
 
     final t = title.toLowerCase();
     if (t.contains('success') || t.contains('✅')) {
-      icon = Icons.check_circle;
-      color = Colors.green;
+      accentColor = Colors.green;
     } else if (t.contains('fail') ||
         t.contains('❌') ||
         t.contains('rejected')) {
-      icon = Icons.cancel;
-      color = Colors.red;
+      accentColor = Colors.red;
     } else if (t.contains('wallet') ||
         t.contains('credited') ||
         t.contains('💰')) {
-      icon = Icons.account_balance_wallet;
-      color = Colors.blue;
+      accentColor = Colors.blue;
     } else if (t.contains('low') || t.contains('⚠️')) {
-      icon = Icons.warning;
-      color = Colors.orange;
+      accentColor = Colors.orange;
     } else if (t.contains('referral') || t.contains('🎉')) {
-      icon = Icons.card_giftcard;
-      color = Colors.purple;
+      accentColor = Colors.purple;
     } else {
-      icon = Icons.notifications;
-      color = Colors.grey;
+      accentColor = const Color(0xFF665ED5); // brand purple
     }
 
     return Container(
-      padding: const EdgeInsets.all(10),
+      width: 46,
+      height: 46,
       decoration: BoxDecoration(
-        color: color.withOpacity(0.1),
         shape: BoxShape.circle,
+        border: Border.all(
+          color: accentColor.withValues(alpha: 0.4),
+          width: 2,
+        ),
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: accentColor.withValues(alpha: 0.15),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
       ),
-      child: Icon(icon, color: color, size: 24),
+      child: ClipOval(
+        child: Image.asset(
+          'images/logo.jpg',
+          width: 46,
+          height: 46,
+          fit: BoxFit.cover,
+        ),
+      ),
     );
   }
 

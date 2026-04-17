@@ -9,6 +9,7 @@ import '../widgets/custom_textfield.dart';
 import '../../utils/ui_helpers.dart';
 import '../../config/app_constants.dart';
 import '../../models/virtual_account_model.dart';
+import 'kyc_screen.dart';
 import 'paystack_webview_screen.dart';
 
 class FundWalletScreen extends StatefulWidget {
@@ -174,7 +175,6 @@ class _FundWalletScreenState extends State<FundWalletScreen> {
     });
 
     if (verifyResult.success) {
-      // Show mock success dialog (or real one depending on the response data)
       final confirmed = await _showPaymentSuccessDialog(amount);
 
       if (confirmed == true && mounted) {
@@ -433,12 +433,17 @@ class _FundWalletScreenState extends State<FundWalletScreen> {
                         SizedBox(
                           width: double.infinity,
                           child: OutlinedButton(
-                            onPressed: () {
-                              // Navigate to KYC (will implement later)
-                              UiHelpers.showSnackBar(
+                            onPressed: () async {
+                              final result = await Navigator.push(
                                 context,
-                                'Navigate to KYC screen',
+                                MaterialPageRoute(
+                                  builder: (_) => const KycScreen(),
+                                ),
                               );
+                              if (result == true && mounted) {
+                                await _loadVirtualAccounts();
+                                setState(() {});
+                              }
                             },
                             style: OutlinedButton.styleFrom(
                               foregroundColor: Colors.orange[700],
