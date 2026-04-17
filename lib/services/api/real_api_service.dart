@@ -1378,10 +1378,6 @@ class RealApiService implements ApiService {
     }
   }
 
-  @override
-  Future<ApiResult<List<ATCRequest>>> getATCHistory() async {
-    return ApiResult.failure('ATC history endpoint not yet available');
-  }
 
   // ═══════════════════════════════════════════════════════════════════════════
   // ERROR HANDLING

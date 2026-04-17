@@ -427,8 +427,6 @@ class ReceiptGenerator {
 
         final file = File('${downloadsDir!.path}/$filename');
         await file.writeAsBytes(bytes);
-
-        debugPrint('Receipt saved to: ${file.path}');
       } else if (Platform.isIOS) {
         // On iOS save to documents then share — iOS has no public Downloads
         final directory = await getApplicationDocumentsDirectory();
@@ -439,7 +437,6 @@ class ReceiptGenerator {
         return;
       }
     } catch (e) {
-      debugPrint('Failed to save receipt: $e');
       // Fallback to share if save fails
       final bytes = await pdf.save();
       final filename = 'receipt_${transaction.reference ?? transaction.id}.pdf';

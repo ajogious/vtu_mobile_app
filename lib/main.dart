@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+// ignore: depend_on_referenced_packages
+import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'config/theme_config.dart';
 import 'providers/referral_provider.dart';
 import 'providers/app_lock_provider.dart';
@@ -18,7 +20,10 @@ import 'screens/lock/app_lock_screen.dart';
 import 'utils/ui_helpers.dart';
 
 void main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  // Preserve the native splash screen until init is complete —
+  // prevents the blank flash between app launch and Flutter rendering.
+  final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
+  FlutterNativeSplash.preserve(widgetsBinding: widgetsBinding);
 
   await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
@@ -27,6 +32,9 @@ void main() async {
   await CacheService.init();
   await NotificationService.init();
   await NotificationService.requestPermissions();
+
+  // Release the native splash — Flutter UI is ready to take over.
+  FlutterNativeSplash.remove();
 
   runApp(const MyApp());
 }

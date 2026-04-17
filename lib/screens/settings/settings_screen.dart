@@ -12,7 +12,6 @@ import '../beneficiaries/beneficiary_management_screen.dart';
 import 'change_password_screen.dart';
 import 'change_pin_screen.dart';
 import '../auth/login_screen.dart';
-import '../widgets/pin_verification_dialog.dart';
 import '../widgets/custom_textfield.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -53,28 +52,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
   Future<void> _toggleBiometric(bool value) async {
     final storage = StorageService();
 
-    // 1. the user must verify their transaction PIN first to toggle biometrics at all
-    final pin = await showPinVerificationDialog(
-      context,
-      title: 'Security Check',
-      subtitle: 'Enter your transaction PIN to ${value ? 'enable' : 'disable'} biometrics',
-      allowBiometric: false, // Must use PIN to verify
-      // Use user.pinSet from the server, but default to false if null
-      serverPinSet: context.read<AuthProvider>().user?.pinSet == 'YES' || context.read<AuthProvider>().user?.pinSet == true, 
-    );
-    
-    if (pin == null) return; // Cancelled or failed PIN
-
-    // 2. We need them to enter their password to confirm identity
+    // Biometric is for LOGIN only — no PIN caching needed.
+    // Just verify account identity with password before enabling.
     final success = await _promptForPasswordToEnableBiometrics();
     if (!success) return;
 
-    if (value) {
-      // Trying to enable
-      // Save the PIN locally so transaction biometrics works immediately after
-      await storage.savePin(pin);
-    } else {
-      // Trying to disable
+    if (!value) {
+      // Disabling — clear saved password so biometric login stops working
       await storage.deletePassword();
     }
 
@@ -82,7 +66,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     setState(() => _biometricEnabled = value);
     UiHelpers.showSnackBar(
       context,
-      value ? 'Biometric enabled' : 'Biometric disabled',
+      value ? 'Biometric login enabled' : 'Biometric login disabled',
     );
   }
 
@@ -310,7 +294,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           SwitchListTile(
             title: const Text('Biometric Authentication'),
-            subtitle: const Text('Use fingerprint or face ID'),
+            subtitle: const Text('Use fingerprint or face ID for login only'),
             secondary: const Icon(Icons.fingerprint),
             value: _biometricEnabled,
             onChanged: _toggleBiometric,

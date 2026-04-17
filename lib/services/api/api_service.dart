@@ -196,6 +196,5 @@ abstract class ApiService {
     String? bankName,
     String? accountName,
   });
-
-  Future<ApiResult<List<ATCRequest>>> getATCHistory();
 }
+

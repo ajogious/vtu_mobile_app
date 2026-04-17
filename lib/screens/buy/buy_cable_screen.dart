@@ -224,26 +224,16 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
     });
 
     if (result.success && result.data != null) {
-      // ✅ FIX: Safe cast — don't assume items is non-null
       final rawItems = result.data!['items'];
       final items = rawItems is List ? rawItems : <dynamic>[];
-
-      print("========== CABLE PLANS DEBUG ==========");
-      print("Total items from API: ${items.length}");
-      print("Filtering for provider: '$provider'");
 
       final parsedPlans = <CablePlan>[];
 
       for (final plan in items) {
         if (plan is! Map) continue;
 
-        // ✅ FIX: Trim both sides before comparing to handle any whitespace
         final cableType = plan['cable_type']?.toString().trim() ?? '';
         final providerTrimmed = provider.trim();
-
-        print(
-          "  Item cable_type: '$cableType' == '$providerTrimmed'? ${cableType == providerTrimmed}",
-        );
 
         if (cableType == providerTrimmed) {
           parsedPlans.add(
@@ -257,10 +247,6 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
           );
         }
       }
-
-      print("Parsed plans for '$provider': ${parsedPlans.length}");
-      print("=======================================");
-
       // Cache for offline use
       await CacheService.cacheCablePlans(provider, parsedPlans);
 

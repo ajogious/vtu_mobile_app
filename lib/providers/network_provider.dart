@@ -99,8 +99,8 @@ class NetworkProvider extends ChangeNotifier {
     for (final callback in _reconnectCallbacks) {
       try {
         callback();
-      } catch (e) {
-        debugPrint('Reconnect callback error: $e');
+      } catch (_) {
+        // Silently ignore errors in reconnect callbacks
       }
     }
   }

@@ -252,7 +252,7 @@ class _AppLockScreenState extends State<AppLockScreen> {
                   CustomTextField(
                     controller: _passwordController,
                     focusNode: _focusNode,
-                    autofocus: true,
+                    autofocus: !_biometricAvailable,
                     obscureText: true,
                     showPasswordToggle: true,
                     keyboardType: TextInputType.visiblePassword,
@@ -261,9 +261,12 @@ class _AppLockScreenState extends State<AppLockScreen> {
                     prefixIcon: Icons.lock,
                     onSubmitted: (_) => _verifyPassword(),
                     onChanged: (value) {
+                      // Defer setState to after the current input frame so the
+                      // rebuild does not interfere with cursor position or the
+                      // keyboard's composing region — fixes the backspace bug.
                       if (_errorMessage.isNotEmpty && !_isLocked) {
-                        setState(() {
-                          _errorMessage = '';
+                        WidgetsBinding.instance.addPostFrameCallback((_) {
+                          if (mounted) setState(() => _errorMessage = '');
                         });
                       }
                     },

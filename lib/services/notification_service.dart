@@ -1,4 +1,3 @@
-import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:intl/intl.dart';
 import 'dart:async';
@@ -397,8 +396,7 @@ class NotificationService {
   static void _onNotificationTapped(NotificationResponse response) {
     final payload = response.payload;
     if (payload == null) return;
-    // Navigation handled via a global key or notification stream
-    debugPrint('Notification tapped: $payload');
+    // Navigation is handled via a global key or notification stream
   }
 
   static Future<void> cancelAll() async {
