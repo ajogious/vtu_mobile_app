@@ -23,11 +23,14 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
   final _formKey = GlobalKey<FormState>();
   final _phoneController = TextEditingController();
   final _amountController = TextEditingController();
+  final _accountNumberController = TextEditingController();
+  final _bankNameController = TextEditingController();
 
   ATCNetwork? _selectedATCNetwork;
   bool _acceptTerms = false;
   bool _isProcessing = false;
   String? _networkMismatchWarning;
+  String _paymentMethod = 'wallet'; // 'wallet' or 'bank'
 
   List<ATCNetwork> _atcNetworks = [];
   bool _isLoadingNetworks = true;
@@ -54,6 +57,8 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
   void dispose() {
     _phoneController.dispose();
     _amountController.dispose();
+    _accountNumberController.dispose();
+    _bankNameController.dispose();
     super.dispose();
   }
 
@@ -225,6 +230,91 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
     );
   }
 
+  // ── Payment method selector ───────────────────────────────────────
+  Widget _buildPaymentMethodSelector() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Payment Method',
+          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(child: _paymentMethodTile('wallet', Icons.account_balance_wallet, 'Wallet')),
+            const SizedBox(width: 12),
+            Expanded(child: _paymentMethodTile('bank', Icons.account_balance, 'Bank Account')),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _paymentMethodTile(String value, IconData icon, String label) {
+    final selected = _paymentMethod == value;
+    return GestureDetector(
+      onTap: () => setState(() => _paymentMethod = value),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 14),
+        decoration: BoxDecoration(
+          color: selected ? Theme.of(context).primaryColor : Colors.grey[100],
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: selected ? Theme.of(context).primaryColor : Colors.grey[300]!,
+            width: selected ? 2 : 1,
+          ),
+          boxShadow: selected
+              ? [BoxShadow(color: Theme.of(context).primaryColor.withOpacity(0.25), blurRadius: 8, offset: const Offset(0, 2))]
+              : [],
+        ),
+        child: Column(
+          children: [
+            Icon(icon, color: selected ? Colors.white : Colors.grey[700], size: 24),
+            const SizedBox(height: 6),
+            Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: selected ? Colors.white : Colors.black87)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ── Bank fields ───────────────────────────────────────────────────
+  Widget _buildBankFields() {
+    return Column(
+      children: [
+        const SizedBox(height: 16),
+        CustomTextField(
+          controller: _accountNumberController,
+          labelText: 'Account Number',
+          hintText: 'Enter your bank account number',
+          prefixIcon: Icons.credit_card,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly, LengthLimitingTextInputFormatter(10)],
+          validator: (v) {
+            if (_paymentMethod != 'bank') return null;
+            if (v == null || v.trim().isEmpty) return 'Please enter account number';
+            if (v.trim().length < 10) return 'Account number must be at least 10 digits';
+            return null;
+          },
+        ),
+        const SizedBox(height: 16),
+        CustomTextField(
+          controller: _bankNameController,
+          labelText: 'Bank Name',
+          hintText: 'e.g. Opay, GTBank, Access',
+          prefixIcon: Icons.account_balance,
+          validator: (v) {
+            if (_paymentMethod != 'bank') return null;
+            if (v == null || v.trim().isEmpty) return 'Please enter bank name';
+            return null;
+          },
+        ),
+      ],
+    );
+  }
+
   // ── Confirmation dialog ───────────────────────────────────────────
   Future<void> _showConfirmationDialog() async {
     UiHelpers.dismissKeyboard(context);
@@ -262,6 +352,14 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                   'N${NumberFormat('#,##0').format(_airtimeAmount)}',
                 ),
                 _buildConfirmRow('Conversion Rate', '$_displayRate%'),
+                _buildConfirmRow(
+                  'Payment Method',
+                  _paymentMethod == 'bank' ? 'Bank Account' : 'Wallet',
+                ),
+                if (_paymentMethod == 'bank') ...[ 
+                  _buildConfirmRow('Account Number', _accountNumberController.text.trim()),
+                  _buildConfirmRow('Bank Name', _bankNameController.text.trim()),
+                ],
                 // Show the receive_phone so user already knows where to send
                 _buildConfirmRow(
                   'Send Airtime To',
@@ -396,6 +494,9 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
         network: _selectedATCNetwork!.network,
         amount: _airtimeAmount,
         number: _phoneController.text.trim(),
+        paymentMethod: _paymentMethod,
+        accountNumber: _paymentMethod == 'bank' ? _accountNumberController.text.trim() : null,
+        bankName: _paymentMethod == 'bank' ? _bankNameController.text.trim() : null,
       );
 
       if (!mounted) return;
@@ -424,15 +525,10 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
   // ── Success dialog ────────────────────────────────────────────────
   void _showSuccessDialog(Map<String, dynamic> data) {
     final transactionId = data['transaction_id']?.toString() ?? '';
-
-    // Prefer receive_phone from the already-loaded ATCNetwork;
-    // fall back to whatever the POST response returns.
-    final sendTo = _selectedATCNetwork?.receivePhone.isNotEmpty == true
-        ? _selectedATCNetwork!.receivePhone
-        : data['send_to']?.toString() ?? '';
-
+    final sendTo = data['send_to']?.toString() ??
+        (_selectedATCNetwork?.receivePhone ?? '');
     final youGet = (data['you_get'] as num?)?.toDouble() ?? _receivableAmount;
-    final rate = _displayRate;
+    final rate = (data['rate_percent'] as num?)?.toInt() ?? _displayRate;
 
     showDialog(
       context: context,
@@ -664,6 +760,14 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                   else
                     _buildNetworkSelector(),
                   const SizedBox(height: 24),
+
+                  // Payment Method
+                  _buildPaymentMethodSelector(),
+                  const SizedBox(height: 24),
+
+                  // Bank fields (shown only when bank is selected)
+                  if (_paymentMethod == 'bank') _buildBankFields(),
+                  if (_paymentMethod == 'bank') const SizedBox(height: 16),
 
                   // Phone Number + contact picker
                   Row(

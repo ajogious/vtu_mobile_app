@@ -1334,15 +1334,30 @@ class RealApiService implements ApiService {
     required String network,
     required double amount,
     required String number,
+    required String paymentMethod,
+    String? accountNumber,
+    String? bankName,
   }) async {
     try {
+      final Map<String, dynamic> body = {
+        'network': network,
+        'amount': amount.toInt(),
+        'sender_phone': number,
+        'payment_method': paymentMethod,
+      };
+
+      if (paymentMethod == 'bank') {
+        if (accountNumber != null && accountNumber.isNotEmpty) {
+          body['account_number'] = accountNumber;
+        }
+        if (bankName != null && bankName.isNotEmpty) {
+          body['bank_name'] = bankName;
+        }
+      }
+
       final response = await _dio.post(
         ApiConfig.atcRequestEndpoint,
-        data: {
-          'network': network,
-          'amount': amount.toInt(), // ← was just `amount` (double), now int
-          'sender_phone': number,
-        },
+        data: body,
       );
 
       final responseData = response.data;
