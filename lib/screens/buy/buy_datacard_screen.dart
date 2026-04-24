@@ -48,8 +48,8 @@ class DataCardPlan {
     );
   }
 
-  String get displayName => '${plan}${size}';
-  String get displayLabel => '$network - ${plan}${size} (${networkType})';
+  String get displayName => '$plan$size';
+  String get displayLabel => '$network - $plan$size ($networkType)';
 }
 
 class BuyDatacardScreen extends StatefulWidget {

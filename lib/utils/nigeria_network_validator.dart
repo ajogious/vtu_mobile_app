@@ -1,6 +1,7 @@
 /// Nigerian network prefix validator.
 /// Used to warn (not hard-block) when a phone number prefix doesn't match
 /// the selected network — because numbers can be ported.
+library;
 
 class NigeriaNetworkValidator {
   /// Map of network name → list of valid prefixes

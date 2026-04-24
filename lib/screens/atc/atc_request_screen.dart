@@ -120,9 +120,9 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
             RegExp(r'[\s\-\(\)]'),
             '',
           );
-          if (phone.startsWith('+234'))
+          if (phone.startsWith('+234')) {
             phone = '0${phone.substring(4)}';
-          else if (phone.startsWith('234'))
+          } else if (phone.startsWith('234'))
             phone = '0${phone.substring(3)}';
           if (!phone.startsWith('0')) phone = '0$phone';
           if (phone.length > 11) phone = phone.substring(0, 11);

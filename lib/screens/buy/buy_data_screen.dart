@@ -47,7 +47,7 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
   String? _selectedDataType;
   DataPlan? _selectedPlan;
   bool _saveBeneficiary = false;
-  bool _isLoadingPlans = false;
+  final bool _isLoadingPlans = false;
   bool _isLoadingNetworks = true;
   bool _isProcessing = false;
   String? _loadPlansError;

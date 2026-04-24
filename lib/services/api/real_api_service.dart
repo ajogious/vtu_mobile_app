@@ -236,6 +236,7 @@ class RealApiService implements ApiService {
     }
   }
 
+  @override
   Future<ApiResult<String>> getNotice() async {
     try {
       final response = await _dio.get(ApiConfig.notificationsEndpoint);
