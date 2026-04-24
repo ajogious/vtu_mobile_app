@@ -143,7 +143,7 @@ class _VTUAppState extends State<VTUApp> with WidgetsBindingObserver {
           scaffoldMessengerKey: rootScaffoldMessengerKey,
           builder: (context, child) {
             return Stack(
-              children: [if (child != null) child, _AppLockOverlay()],
+              children: [?child, _AppLockOverlay()],
             );
           },
           home: const SplashScreen(),
@@ -165,6 +165,9 @@ class _AppLockOverlay extends StatelessWidget {
         color: Theme.of(context).scaffoldBackgroundColor,
         child: AppLockScreen(
           onUnlocked: () {
+            // Dismiss any keyboard from the lock screen before removing the
+            // overlay — prevents a floating keyboard over the underlying app.
+            FocusManager.instance.primaryFocus?.unfocus();
             context.read<AppLockProvider>().unlock();
           },
         ),
