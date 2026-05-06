@@ -209,16 +209,18 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
     );
 
     if (verifiedPin == null) {
+      if (!mounted) return;
       UiHelpers.showSnackBar(context, 'Transaction cancelled', isError: true);
       return;
     }
 
+    if (!mounted) return;
     if (_totalAmount >= 10000) {
       final reAuthenticated = await requireReAuthentication(
         context,
         action: 'authorize this large transaction',
       );
-
+      if (!mounted) return;
       if (!reAuthenticated) {
         UiHelpers.showSnackBar(
           context,
@@ -229,6 +231,7 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
       }
     }
 
+    if (!mounted) return;
     setState(() => _isProcessing = true);
 
     final authService = context.read<AuthProvider>().authService;
@@ -270,10 +273,12 @@ class _BuyDatacardScreenState extends State<BuyDatacardScreen> {
 
       context.read<TransactionProvider>().addTransaction(transaction);
       await NotificationService.transactionSuccess(transaction);
+      if (!mounted) return;
 
       final newBalance = context.read<WalletProvider>().balance;
       if (newBalance < 500) {
         await NotificationService.lowBalance(newBalance);
+        if (!mounted) return;
       }
 
       Navigator.pushReplacement(

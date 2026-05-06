@@ -13,8 +13,7 @@ abstract class ApiService {
   static final StreamController<void> onUnauthenticated =
       StreamController<void>.broadcast();
 
-  // ========== AUTHENTICATION ==========
-
+  // Authentication
   Future<ApiResult<Map<String, dynamic>>> register({
     required String firstname,
     required String lastname,
@@ -45,8 +44,7 @@ abstract class ApiService {
 
   Future<ApiResult<String>> logout();
 
-  // ========== USER ==========
-
+  // User
   Future<ApiResult<User>> getMe();
 
   Future<ApiResult<String>> getNotice();
@@ -70,8 +68,7 @@ abstract class ApiService {
     required String newPin,
   });
 
-  // ========== KYC & WALLET ==========
-
+  // KYC & Wallet
   Future<ApiResult<List<VirtualAccount>>> verifyKyc({
     required String type,
     required String value,
@@ -90,8 +87,7 @@ abstract class ApiService {
     required String reference,
   });
 
-  // ========== PLANS ==========
-
+  // Plans
   Future<ApiResult<List<DataPlan>>> getDataPlans({String? network});
 
   Future<ApiResult<List<AirtimeNetwork>>> getAirtimeNetworks();
@@ -104,8 +100,7 @@ abstract class ApiService {
 
   Future<ApiResult<Map<String, dynamic>>> getDataCardPlans();
 
-  // ========== VALIDATION ==========
-
+  // Validation
   Future<ApiResult<Map<String, dynamic>>> validateMeter({
     required String disco,
     required String meterNumber,
@@ -117,8 +112,7 @@ abstract class ApiService {
     required String smartcard,
   });
 
-  // ========== PURCHASES ==========
-
+  // Purchases
   Future<ApiResult<Map<String, dynamic>>> buyAirtime({
     required String network,
     required String number,
@@ -161,8 +155,7 @@ abstract class ApiService {
     required String pincode,
   });
 
-  // ========== TRANSACTIONS ==========
-
+  // Transactions
   Future<ApiResult<PaginatedTransactions>> getTransactions({
     int page = 1,
     int limit = 10,
@@ -173,8 +166,7 @@ abstract class ApiService {
 
   Future<ApiResult<Transaction>> getTransactionDetail(String id);
 
-  // ========== REFERRALS ==========
-
+  // Referrals
   Future<ApiResult<ReferralStats>> getReferralStats();
 
   Future<ApiResult<List<ReferralEarning>>> getReferralHistory();
@@ -184,17 +176,16 @@ abstract class ApiService {
     required String pincode,
   });
 
-  // ========== AIRTIME TO CASH ==========
+  // Airtime to Cash
   Future<ApiResult<List<ATCNetwork>>> getATCNetworks();
 
   Future<ApiResult<Map<String, dynamic>>> submitATCRequest({
     required String network,
     required double amount,
     required String number,
-    required String paymentMethod, // 'bank' or 'wallet'
+    required String paymentMethod,
     String? accountNumber,
     String? bankName,
     String? accountName,
   });
 }
-

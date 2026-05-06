@@ -838,7 +838,7 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
         margin: const EdgeInsets.symmetric(horizontal: 4),
         padding: const EdgeInsets.symmetric(vertical: 20),
         decoration: BoxDecoration(
-          color: isSelected ? color.withOpacity(0.1) : Colors.grey[100],
+          color: isSelected ? color.withValues(alpha: 0.1) : Colors.grey[100],
           border: Border.all(
             color: isSelected ? color : Colors.grey[300]!,
             width: isSelected ? 2 : 1,
@@ -884,19 +884,14 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
           ),
           borderRadius: BorderRadius.circular(12),
           color: isSelected
-              ? Theme.of(context).primaryColor.withOpacity(0.05)
+              ? Theme.of(context).primaryColor.withValues(alpha: 0.05)
               : null,
         ),
         child: Row(
           children: [
-            Radio<CablePlan>(
-              value: plan,
-              groupValue: _selectedPlan,
-              onChanged: (value) {
-                setState(() {
-                  _selectedPlan = value;
-                });
-              },
+            Icon(
+              isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+              color: isSelected ? Theme.of(context).primaryColor : Colors.grey[400],
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -990,7 +985,7 @@ class _BuyCableScreenState extends State<BuyCableScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Colors.purple.withOpacity(0.1),
+          backgroundColor: Colors.purple.withValues(alpha: 0.1),
           child: const Icon(Icons.tv, color: Colors.purple),
         ),
         title: Text(transaction.metadata?['customer_name'] ?? ''),

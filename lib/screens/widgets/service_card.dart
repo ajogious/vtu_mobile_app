@@ -33,7 +33,7 @@ class ServiceCard extends StatelessWidget {
             gradient: LinearGradient(
               begin: Alignment.topLeft,
               end: Alignment.bottomRight,
-              colors: [cardColor.withOpacity(0.1), cardColor.withOpacity(0.05)],
+              colors: [cardColor.withValues(alpha: 0.1), cardColor.withValues(alpha: 0.05)],
             ),
           ),
           child: LayoutBuilder(
@@ -52,7 +52,7 @@ class ServiceCard extends StatelessWidget {
                     child: Container(
                       padding: EdgeInsets.all(iconPadding),
                       decoration: BoxDecoration(
-                        color: cardColor.withOpacity(0.2),
+                        color: cardColor.withValues(alpha: 0.2),
                         shape: BoxShape.circle,
                       ),
                       child: Icon(icon, size: iconSize, color: cardColor),

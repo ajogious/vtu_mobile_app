@@ -3,6 +3,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../../config/client_config.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/network_provider.dart';
 import '../../providers/wallet_provider.dart';
@@ -256,7 +257,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
           leading: Padding(
             padding: const EdgeInsets.all(8.0),
             child: ClipOval(
-              child: Image.asset('images/logo.jpg', fit: BoxFit.cover),
+              child: Image.asset(BrandConfig.logoAsset, fit: BoxFit.cover),
             ),
           ),
           title: Column(
@@ -452,13 +453,13 @@ class _DashboardScreenState extends State<DashboardScreen> {
           end: Alignment.bottomRight,
           colors: [
             Theme.of(context).primaryColor,
-            Theme.of(context).primaryColor.withOpacity(0.8),
+            Theme.of(context).primaryColor.withValues(alpha: 0.8),
           ],
         ),
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Theme.of(context).primaryColor.withOpacity(0.3),
+            color: Theme.of(context).primaryColor.withValues(alpha: 0.3),
             blurRadius: 10,
             offset: const Offset(0, 5),
           ),
@@ -632,7 +633,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.pink.withOpacity(0.1),
+                  color: Colors.pink.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(
@@ -683,7 +684,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.green.withOpacity(0.1),
+                  color: Colors.green.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: const Icon(

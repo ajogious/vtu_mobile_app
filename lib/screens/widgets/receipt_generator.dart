@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 import '../../models/transaction_model.dart';
+import '../../config/client_config.dart';
 import '../../config/app_constants.dart';
 
 class ReceiptGenerator {
@@ -64,8 +65,14 @@ class ReceiptGenerator {
     final pdf = pw.Document();
 
     // Load logo from assets
-    final logoBytes = await rootBundle.load('images/logo.jpg');
-    final logoImage = pw.MemoryImage(logoBytes.buffer.asUint8List());
+    late final pw.MemoryImage logoImage;
+    try {
+      final logoBytes = await rootBundle.load(BrandConfig.logoAsset);
+      logoImage = pw.MemoryImage(logoBytes.buffer.asUint8List());
+    } catch (_) {
+      final defaultLogoBytes = await rootBundle.load(AppConstants.logoAssetPath);
+      logoImage = pw.MemoryImage(defaultLogoBytes.buffer.asUint8List());
+    }
 
     pdf.addPage(
       pw.Page(
@@ -95,7 +102,7 @@ class ReceiptGenerator {
                     ),
                     pw.SizedBox(height: 12),
                     pw.Text(
-                      AppConstants.appName,
+                      BrandConfig.appName,
                       style: pw.TextStyle(
                         fontSize: 20,
                         fontWeight: pw.FontWeight.bold,
@@ -221,7 +228,7 @@ class ReceiptGenerator {
                 child: pw.Column(
                   children: [
                     pw.Text(
-                      'Thank you for using ${AppConstants.appName}',
+                      'Thank you for using ${BrandConfig.appName}',
                       style: pw.TextStyle(
                         fontSize: 12,
                         fontWeight: pw.FontWeight.bold,
@@ -229,7 +236,7 @@ class ReceiptGenerator {
                     ),
                     pw.SizedBox(height: 4),
                     pw.Text(
-                      'Email: ${AppConstants.supportEmail}',
+                      'Email: ${BrandConfig.supportEmail}',
                       style: const pw.TextStyle(
                         fontSize: 10,
                         color: PdfColors.grey700,
@@ -237,7 +244,7 @@ class ReceiptGenerator {
                     ),
                     pw.SizedBox(height: 2),
                     pw.Text(
-                      'Phone/WhatsApp: ${AppConstants.supportPhone}',
+                      'Phone/WhatsApp: ${BrandConfig.supportPhone}',
                       style: const pw.TextStyle(
                         fontSize: 10,
                         color: PdfColors.grey700,

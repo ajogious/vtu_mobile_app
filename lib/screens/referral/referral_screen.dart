@@ -3,7 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import 'package:share_plus/share_plus.dart';
-import '../../config/app_constants.dart';
+import '../../config/client_config.dart';
 import '../../models/referral_model.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/referral_provider.dart';
@@ -39,7 +39,7 @@ class _ReferralScreenState extends State<ReferralScreen> {
   void _shareReferralCode(String code) {
     final message =
         '''
-🎉 Join VTU App and get amazing rewards!
+🎉 Join ${BrandConfig.appName} and get amazing rewards!
 
 Use my referral code: $code
 
@@ -49,13 +49,13 @@ Use my referral code: $code
 
 Download now and start earning!'''
             .trim();
-    Share.share(message);
+    SharePlus.instance.share(ShareParams(text: message));
   }
 
   void _shareViaWhatsApp(String code) {
     final message =
         '''
-🎉 Join *${AppConstants.appName}* and get amazing rewards!
+🎉 Join *${BrandConfig.appName}* and get amazing rewards!
 
 Use my referral code: *$code*
 
@@ -63,33 +63,35 @@ Use my referral code: *$code*
 ✅ Pay bills instantly
 ✅ Earn while you refer
 
-Download now: ${AppConstants.appDownloadLink}
+Download now: ${BrandConfig.appDownloadLink}
   '''
             .trim();
-    Share.share(message);
+    SharePlus.instance.share(ShareParams(text: message));
   }
 
   void _shareViaSMS(String code) {
-    Share.share(
-      'Join ${AppConstants.appName} with my referral code: $code. Download: ${AppConstants.appDownloadLink}',
+    SharePlus.instance.share(
+      ShareParams(
+        text: 'Join ${BrandConfig.appName} with my referral code: $code. Download: ${BrandConfig.appDownloadLink}',
+      ),
     );
   }
 
   void _shareViaEmail(String code) {
     final message =
         '''
-Join ${AppConstants.appName} and get amazing rewards!
+Join ${BrandConfig.appName} and get amazing rewards!
 
 Use my referral code: $code
 
-${AppConstants.appTagline}
+${BrandConfig.tagline}
 
-Download now: ${AppConstants.appDownloadLink}
+Download now: ${BrandConfig.appDownloadLink}
 
-Need help? Contact us at ${AppConstants.supportEmail}
+Need help? Contact us at ${BrandConfig.supportEmail}
   '''
             .trim();
-    Share.share(message);
+    SharePlus.instance.share(ShareParams(text: message));
   }
 
   @override
@@ -116,13 +118,13 @@ Need help? Contact us at ${AppConstants.supportEmail}
                     end: Alignment.bottomRight,
                     colors: [
                       Theme.of(context).primaryColor,
-                      Theme.of(context).primaryColor.withOpacity(0.8),
+                      Theme.of(context).primaryColor.withValues(alpha: 0.8),
                     ],
                   ),
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Theme.of(context).primaryColor.withOpacity(0.3),
+                      color: Theme.of(context).primaryColor.withValues(alpha: 0.3),
                       blurRadius: 10,
                       offset: const Offset(0, 5),
                     ),
@@ -340,7 +342,7 @@ Need help? Contact us at ${AppConstants.supportEmail}
                               Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: Colors.purple.withOpacity(0.1),
+                                  color: Colors.purple.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: const Icon(
@@ -512,7 +514,7 @@ Need help? Contact us at ${AppConstants.supportEmail}
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
+                color: color.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: Icon(icon, color: color, size: 28),
@@ -547,13 +549,12 @@ Need help? Contact us at ${AppConstants.supportEmail}
     );
   }
 
-  // FIXED: now accepts ReferralEarning object instead of Map
   Widget _buildEarningItem(ReferralEarning earning) {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Colors.green.withOpacity(0.1),
+          backgroundColor: Colors.green.withValues(alpha: 0.1),
           child: const Icon(Icons.add, color: Colors.green),
         ),
         title: Text(

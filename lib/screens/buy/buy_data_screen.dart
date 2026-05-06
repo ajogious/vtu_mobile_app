@@ -706,7 +706,7 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
                         style: IconButton.styleFrom(
                           backgroundColor: Theme.of(
                             context,
-                          ).primaryColor.withOpacity(0.1),
+                          ).primaryColor.withValues(alpha: 0.1),
                           padding: const EdgeInsets.all(16),
                         ),
                       ),
@@ -736,7 +736,7 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
                           },
                           selectedColor: Theme.of(
                             context,
-                          ).primaryColor.withOpacity(0.2),
+                          ).primaryColor.withValues(alpha: 0.2),
                           labelStyle: TextStyle(
                             color: isSelected
                                 ? Theme.of(context).primaryColor
@@ -946,15 +946,14 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
           ),
           borderRadius: BorderRadius.circular(12),
           color: isSelected
-              ? Theme.of(context).primaryColor.withOpacity(0.05)
+              ? Theme.of(context).primaryColor.withValues(alpha: 0.05)
               : null,
         ),
         child: Row(
           children: [
-            Radio<DataPlan>(
-              value: plan,
-              groupValue: _selectedPlan,
-              onChanged: (value) => setState(() => _selectedPlan = value),
+            Icon(
+              isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+              color: isSelected ? Theme.of(context).primaryColor : Colors.grey[400],
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -1039,7 +1038,7 @@ class _BuyDataScreenState extends State<BuyDataScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Colors.green.withOpacity(0.1),
+          backgroundColor: Colors.green.withValues(alpha: 0.1),
           child: const Icon(Icons.wifi, color: Colors.green),
         ),
         title: Text(transaction.beneficiary ?? ''),

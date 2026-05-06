@@ -177,3 +177,12 @@ coverage/
 # ----------------------------
 app.*.symbols
 app.*.map.json
+
+# ----------------------------
+# White-label signing secrets
+# ----------------------------
+# Per-flavor key.properties files (real credentials — never commit these)
+android/*-key.properties
+# Keystore binaries
+*.keystore
+*.jks

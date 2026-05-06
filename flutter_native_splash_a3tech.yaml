@@ -1,0 +1,11 @@
+# A3TECH DATA — Native Splash Config
+# Run with: dart run flutter_native_splash:create --path=flutter_native_splash_a3tech.yaml
+flutter_native_splash:
+  color: "#665ED5"
+  image: images/a3tech/logo.jpg
+  android_12:
+    image: images/a3tech/logo.jpg
+    icon_background_color: "#665ED5"
+    color: "#665ED5"
+  ios: true
+  fullscreen: false

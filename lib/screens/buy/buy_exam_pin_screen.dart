@@ -133,21 +133,18 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
   }
 
   Future<void> _buyExamPin() async {
-    // Check internet connection
     final isOnline = context.read<NetworkProvider>().isOnline;
     if (!isOnline) {
       ErrorHandler.handleOfflineMode(context);
       return;
     }
 
-    // Check balance
     final balance = context.read<WalletProvider>().balance;
     if (balance < _totalAmount) {
       ErrorHandler.handleInsufficientBalance(context, balance, _totalAmount);
       return;
     }
 
-    // Verify PIN
     final serverPinSet = context.read<AuthProvider>().user?.pinSet == true;
     final verifiedPin = await showPinVerificationDialog(
       context,
@@ -158,17 +155,18 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
     );
 
     if (verifiedPin == null) {
+      if (!mounted) return;
       UiHelpers.showSnackBar(context, 'Transaction cancelled', isError: true);
       return;
     }
 
-    // Re-authentication for large amounts
+    if (!mounted) return;
     if (_totalAmount >= 10000) {
       final reAuthenticated = await requireReAuthentication(
         context,
         action: 'authorize this large transaction',
       );
-
+      if (!mounted) return;
       if (!reAuthenticated) {
         UiHelpers.showSnackBar(
           context,
@@ -181,6 +179,7 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
 
     setState(() => _isProcessing = true);
 
+    if (!mounted) return;
     final authService = context.read<AuthProvider>().authService;
     final result = await authService.api.buyExamPin(
       examType: _selectedExamType!.examType,
@@ -193,12 +192,10 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
     setState(() => _isProcessing = false);
 
     if (result.success && result.data != null) {
-      // Update balance
       final walletProvider = context.read<WalletProvider>();
       final balanceBefore = walletProvider.balance;
       walletProvider.deductBalance(_totalAmount);
 
-      // Create transaction
       final transaction = Transaction(
         id: result.data!['transaction_id'] ?? '',
         type: TransactionType.examPin,
@@ -216,19 +213,17 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
         },
       );
 
-      // Add to history
       context.read<TransactionProvider>().addTransaction(transaction);
 
-      // Fire notification
       await NotificationService.transactionSuccess(transaction);
+      if (!mounted) return;
 
-      // Check low balance
       final newBalance = context.read<WalletProvider>().balance;
       if (newBalance < 500) {
         await NotificationService.lowBalance(newBalance);
+        if (!mounted) return;
       }
 
-      // Navigate to success screen
       Navigator.pushReplacement(
         context,
         MaterialPageRoute(
@@ -401,7 +396,7 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
                         end: Alignment.bottomRight,
                         colors: [
                           Theme.of(context).primaryColor,
-                          Theme.of(context).primaryColor.withOpacity(0.8),
+                          Theme.of(context).primaryColor.withValues(alpha: 0.8),
                         ],
                       ),
                       borderRadius: BorderRadius.circular(16),
@@ -474,15 +469,14 @@ class _BuyExamPinScreenState extends State<BuyExamPinScreen> {
           ),
           borderRadius: BorderRadius.circular(12),
           color: isSelected
-              ? Theme.of(context).primaryColor.withOpacity(0.05)
+              ? Theme.of(context).primaryColor.withValues(alpha: 0.05)
               : null,
         ),
         child: Row(
           children: [
-            Radio<String>(
-              value: plan.examType,
-              groupValue: _selectedExamType?.examType,
-              onChanged: (_) => setState(() => _selectedExamType = plan),
+            Icon(
+              isSelected ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+              color: isSelected ? Theme.of(context).primaryColor : Colors.grey[400],
             ),
             const SizedBox(width: 12),
             Expanded(

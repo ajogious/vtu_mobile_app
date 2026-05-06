@@ -1,7 +1,5 @@
-// ignore_for_file: unused_import, unused_field
 
 import 'package:flutter/material.dart';
-import 'package:provider/provider.dart';
 import '../../services/storage_service.dart';
 import '../widgets/custom_textfield.dart';
 import '../widgets/empty_state.dart';
@@ -23,7 +21,6 @@ class _BeneficiaryManagementScreenState
   final _searchController = TextEditingController();
   List<Map<String, String>> _beneficiaries = [];
   List<Map<String, String>> _filteredBeneficiaries = [];
-  final bool _isLoading = false;
 
   @override
   void initState() {
@@ -70,13 +67,13 @@ class _BeneficiaryManagementScreenState
     Map<String, String> beneficiary,
     int index,
   ) async {
-    // Re-authenticate before deleting
     final authenticated = await requireReAuthentication(
       context,
       action: 'delete this beneficiary',
     );
 
     if (!authenticated) return;
+    if (!mounted) return;
 
     final confirmed = await showDialog<bool>(
       context: context,
@@ -140,7 +137,6 @@ class _BeneficiaryManagementScreenState
       _onSearchChanged();
     });
 
-    // Save to storage
     final storage = StorageService();
     final all = storage.getBeneficiaries();
     all[widget.serviceType] = _beneficiaries;
@@ -281,7 +277,7 @@ class _BeneficiaryManagementScreenState
       margin: const EdgeInsets.only(bottom: 12),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: color.withOpacity(0.1),
+          backgroundColor: color.withValues(alpha: 0.1),
           child: Text(
             name[0].toUpperCase(),
             style: TextStyle(color: color, fontWeight: FontWeight.bold),

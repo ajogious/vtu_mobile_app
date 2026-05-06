@@ -32,7 +32,6 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   }
 
   Future<void> _fetchDetail() async {
-    // Need the transactionID (provider reference) not the database id
     final transactionID = widget.transaction.reference;
     if (transactionID == null || transactionID.isEmpty) {
       setState(() => _isLoadingDetail = false);
@@ -172,6 +171,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
         UiHelpers.showSnackBar(context, 'Receipt saved to Downloads folder');
       }
     } catch (e) {
+      if (!mounted) return;
       UiHelpers.showSnackBar(
         context,
         'Failed to generate receipt: $e',
@@ -211,7 +211,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                 gradient: LinearGradient(
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
-                  colors: [statusColor, statusColor.withOpacity(0.8)],
+                  colors: [statusColor, statusColor.withValues(alpha: 0.8)],
                 ),
               ),
               child: Column(
@@ -261,7 +261,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: statusColor.withOpacity(0.1),
+                              color: statusColor.withValues(alpha: 0.1),
                               borderRadius: BorderRadius.circular(12),
                             ),
                             child: Icon(
@@ -603,7 +603,7 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                 decoration: BoxDecoration(
-                  color: Theme.of(context).primaryColor.withOpacity(0.1),
+                  color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -660,14 +660,10 @@ class _TransactionDetailScreenState extends State<TransactionDetailScreen> {
   Widget _buildMetadataCard() {
     final metadata = _transaction.metadata!;
     final displayData = Map<String, dynamic>.from(metadata);
-
-    // Remove fields already displayed elsewhere
     displayData.remove('pins');
     displayData.remove('token');
     displayData.remove('units');
     displayData.remove('description');
-    displayData.remove('response');
-
     if (displayData.isEmpty) return const SizedBox.shrink();
 
     return Card(

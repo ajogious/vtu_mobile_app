@@ -1,5 +1,4 @@
 import 'api/api_service.dart';
-// import 'api/mock_api_service.dart';
 import 'api/real_api_service.dart';
 import 'storage_service.dart';
 import '../core/api_result.dart';
@@ -9,19 +8,16 @@ class AuthService {
   late final ApiService _api;
   final StorageService _storage = StorageService();
 
-  AuthService({bool useMock = false}) {
+  AuthService() {
     _api = RealApiService();
   }
 
-  // Login
   Future<ApiResult<User>> login(String username, String password) async {
     final response = await _api.login(username: username, password: password);
 
     if (response.success && response.data != null) {
-      // Save token
       await _storage.saveToken(response.data!['token']);
 
-      // Save token expiry if provided
       if (response.data!['expires_at'] != null) {
         await _storage.saveTokenExpiry(response.data!['expires_at']);
       }
@@ -39,7 +35,6 @@ class AuthService {
     );
   }
 
-  // Register
   Future<ApiResult<User>> register({
     required String firstname,
     required String lastname,
@@ -74,7 +69,6 @@ class AuthService {
     );
   }
 
-  // Logout
   Future<void> logout() async {
     await _api.logout();
     await _storage.clearAuth();
@@ -146,11 +140,9 @@ class AuthService {
     }
   }
 
-  // Get current user from storage
   User? getCurrentUser() {
     return _storage.getUser();
   }
 
-  // Get API service (for use in other services/providers)
   ApiService get api => _api;
 }

@@ -109,7 +109,6 @@ class _FundWalletScreenState extends State<FundWalletScreen> {
     final authProvider = context.read<AuthProvider>();
     final apiService = authProvider.authService.api;
 
-    // 1. Initialize Payment
     final initResult = await apiService.initializePaystackPayment(amount: amount);
 
     if (!mounted) return;
@@ -144,7 +143,6 @@ class _FundWalletScreenState extends State<FundWalletScreen> {
       _isProcessingPayment = false;
     });
 
-    // 2. Open Webview
     final successUrl = await Navigator.of(context).push<bool>(
       MaterialPageRoute(
         builder: (_) => PaystackWebviewScreen(
@@ -154,21 +152,20 @@ class _FundWalletScreenState extends State<FundWalletScreen> {
       ),
     );
 
-    if (successUrl != true || !mounted) {
+    if (successUrl != true) {
+      if (!mounted) return;
       UiHelpers.showSnackBar(context, 'Payment cancelled');
       return;
     }
+    if (!mounted) return;
 
     setState(() {
       _isProcessingPayment = true;
     });
 
-    // 3. Verify Payment
     final verifyResult = await apiService.verifyPaystackPayment(reference: reference);
 
-    if (!mounted) {
-      return;
-    }
+    if (!mounted) return;
     
     setState(() {
       _isProcessingPayment = false;
@@ -178,18 +175,9 @@ class _FundWalletScreenState extends State<FundWalletScreen> {
       final confirmed = await _showPaymentSuccessDialog(amount);
 
       if (confirmed == true && mounted) {
-        // Update wallet balance, Ideally we might fetch user's new balance from the server here
-        // But for now we just add locally just like before
         final walletProvider = context.read<WalletProvider>();
         walletProvider.fetchBalance(forceRefresh: true);
-
-        // Show success message
-        UiHelpers.showSnackBar(
-          context,
-          'Wallet funded successfully',
-        );
-
-        // Go back to previous screen
+        UiHelpers.showSnackBar(context, 'Wallet funded successfully');
         Navigator.pop(context);
       }
     } else {
@@ -271,7 +259,6 @@ class _FundWalletScreenState extends State<FundWalletScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Header
                 Text(
                   'How much do you want to fund?',
                   style: Theme.of(
@@ -521,7 +508,7 @@ class _FundWalletScreenState extends State<FundWalletScreen> {
                 Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: Theme.of(context).primaryColor.withOpacity(0.1),
+                    color: Theme.of(context).primaryColor.withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(8),
                   ),
                   child: Icon(

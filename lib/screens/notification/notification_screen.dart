@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../../config/client_config.dart';
 import '../../providers/notification_provider.dart';
 import '../../models/notification_item.dart';
 
@@ -85,7 +86,7 @@ class NotificationScreen extends StatelessWidget {
       child: Material(
         color: notification.isRead
             ? Theme.of(context).scaffoldBackgroundColor
-            : Colors.blue.withOpacity(0.05),
+            : Colors.blue.withValues(alpha: 0.05),
         child: InkWell(
           onTap: () {
             if (!notification.isRead) {
@@ -174,10 +175,7 @@ class NotificationScreen extends StatelessWidget {
       height: 46,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        border: Border.all(
-          color: accentColor.withValues(alpha: 0.4),
-          width: 2,
-        ),
+        border: Border.all(color: accentColor.withValues(alpha: 0.4), width: 2),
         color: Colors.white,
         boxShadow: [
           BoxShadow(
@@ -189,7 +187,7 @@ class NotificationScreen extends StatelessWidget {
       ),
       child: ClipOval(
         child: Image.asset(
-          'images/logo.jpg',
+          BrandConfig.logoAsset,
           width: 46,
           height: 46,
           fit: BoxFit.cover,

@@ -122,8 +122,9 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
           );
           if (phone.startsWith('+234')) {
             phone = '0${phone.substring(4)}';
-          } else if (phone.startsWith('234'))
+          } else if (phone.startsWith('234')) {
             phone = '0${phone.substring(3)}';
+          }
           if (!phone.startsWith('0')) phone = '0$phone';
           if (phone.length > 11) phone = phone.substring(0, 11);
           setState(() => _phoneController.text = phone);
@@ -182,7 +183,7 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                           BoxShadow(
                             color: Theme.of(
                               context,
-                            ).primaryColor.withOpacity(0.3),
+                            ).primaryColor.withValues(alpha: 0.3),
                             blurRadius: 8,
                             offset: const Offset(0, 2),
                           ),
@@ -207,7 +208,7 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                       ),
                       decoration: BoxDecoration(
                         color: isSelected
-                            ? Colors.white.withOpacity(0.25)
+                            ? Colors.white.withValues(alpha: 0.25)
                             : Colors.green[50],
                         borderRadius: BorderRadius.circular(20),
                       ),
@@ -266,7 +267,7 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
             width: selected ? 2 : 1,
           ),
           boxShadow: selected
-              ? [BoxShadow(color: Theme.of(context).primaryColor.withOpacity(0.25), blurRadius: 8, offset: const Offset(0, 2))]
+              ? [BoxShadow(color: Theme.of(context).primaryColor.withValues(alpha: 0.25), blurRadius: 8, offset: const Offset(0, 2))]
               : [],
         ),
         child: Column(
@@ -807,7 +808,7 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                         style: IconButton.styleFrom(
                           backgroundColor: Theme.of(
                             context,
-                          ).primaryColor.withOpacity(0.1),
+                          ).primaryColor.withValues(alpha: 0.1),
                           padding: const EdgeInsets.all(16),
                         ),
                       ),
@@ -856,7 +857,7 @@ class _AtcRequestScreenState extends State<AtcRequestScreen> {
                         gradient: LinearGradient(
                           begin: Alignment.topLeft,
                           end: Alignment.bottomRight,
-                          colors: [Colors.green, Colors.green.withOpacity(0.8)],
+                          colors: [Colors.green, Colors.green.withValues(alpha: 0.8)],
                         ),
                         borderRadius: BorderRadius.circular(16),
                       ),

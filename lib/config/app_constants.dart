@@ -1,10 +1,16 @@
+import '../flavors/flavor_config.dart';
+
 class AppConstants {
-  // App Info
-  static const String appName = 'A3TECH DATA';
+  // Brand — sourced from the active flavor config set at app startup
+  static String get appName => FlavorConfig.instance.appName;
+  static String get supportEmail => FlavorConfig.instance.supportEmail;
+  static String get supportPhone => FlavorConfig.instance.supportPhone;
+  static String get supportWhatsApp => FlavorConfig.instance.supportWhatsApp;
+  static String get appDownloadLink => FlavorConfig.instance.appDownloadLink;
+  static String get appTagline => FlavorConfig.instance.appTagline;
+  static String get logoAssetPath => FlavorConfig.instance.logoAssetPath;
+
   static const String appVersion = '1.0.0';
-  static const String supportEmail = 'support@a3tech.com.ng';
-  static const String supportPhone = '+234 813 292 5207';
-  static const String supportWhatsApp = '+234 813 292 5207';
 
   // Wallet
   static const double minFundingAmount = 100.0;
@@ -37,27 +43,21 @@ class AppConstants {
     'JEDC',
   ];
 
-  // Data Types
+  // Data Types per network
   static const List<String> mtnDataTypes = ['SME', 'GIFTING', 'COUPON'];
   static const List<String> gloDataTypes = ['CG'];
   static const List<String> airtelDataTypes = ['CG'];
   static const List<String> nineMobileDataTypes = ['GIFTING'];
 
-  // Amount Limits
+  // Amount limits
   static const double minAirtimeAmount = 50;
   static const double maxAirtimeAmount = 10000;
   static const double minElectricityAmount = 1000;
   static const double maxElectricityAmount = 50000;
 
-  // Quick Airtime Amounts
+  // Quick airtime amounts
   static const List<double> quickAirtimeAmounts = [
-    50,
-    100,
-    200,
-    500,
-    1000,
-    2000,
-    5000,
+    50, 100, 200, 500, 1000, 2000, 5000,
   ];
 
   // PIN
@@ -65,14 +65,4 @@ class AppConstants {
 
   // Session
   static const Duration sessionTimeout = Duration(minutes: 30);
-
-  // App Links
-  // static const String appPlayStoreLink =
-  //     'https://play.google.com/store/apps/details?id=com.a3tech.vtu';
-  // static const String appAppStoreLink =
-  //     'https://apps.apple.com/app/a3tech/id123456789';
-  static const String appDownloadLink =
-      'https://a3tech.com.ng/download'; // replace with your real link
-  static const String appTagline =
-      'Buy airtime & data at the best rates, pay bills instantly, and earn while you refer!';
 }

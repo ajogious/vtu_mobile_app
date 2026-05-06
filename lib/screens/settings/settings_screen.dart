@@ -2,6 +2,7 @@
 
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../config/client_config.dart';
 import '../../config/app_constants.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/app_lock_provider.dart';
@@ -407,23 +408,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             leading: const Icon(Icons.email),
             title: const Text('Contact Support'),
-            subtitle: Text(AppConstants.supportEmail),
+            subtitle: Text(BrandConfig.supportEmail),
             trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () => UiHelpers.launchEmail(AppConstants.supportEmail),
+            onTap: () => UiHelpers.launchEmail(BrandConfig.supportEmail),
           ),
           ListTile(
             leading: const Icon(Icons.phone),
             title: const Text('Call Support'),
-            subtitle: Text(AppConstants.supportPhone),
+            subtitle: Text(BrandConfig.supportPhone),
             trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () => UiHelpers.launchPhone(AppConstants.supportPhone),
+            onTap: () => UiHelpers.launchPhone(BrandConfig.supportPhone),
           ),
           ListTile(
             leading: const Icon(Icons.chat),
             title: const Text('WhatsApp Support'),
-            subtitle: Text(AppConstants.supportWhatsApp),
+            subtitle: Text(BrandConfig.supportWhatsApp),
             trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-            onTap: () => UiHelpers.launchWhatsApp(AppConstants.supportWhatsApp),
+            onTap: () => UiHelpers.launchWhatsApp(BrandConfig.supportWhatsApp),
           ),
           ListTile(
             leading: const Icon(Icons.description),

@@ -1,4 +1,3 @@
-// ignore_for_file: use_build_context_synchronously
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -64,12 +63,13 @@ class _KycScreenState extends State<KycScreen> {
     );
 
     if (verifiedPin == null) {
-      // User cancelled PIN dialog
+      if (!mounted) return;
       UiHelpers.showSnackBar(context, 'Verification cancelled', isError: true);
       return;
     }
     // ──────────────────────────────────────────────────────────────────────
 
+    if (!mounted) return;
     setState(() => _isLoading = true);
 
     final authProvider = context.read<AuthProvider>();
@@ -88,6 +88,7 @@ class _KycScreenState extends State<KycScreen> {
       if (authProvider.user != null) {
         final updatedUser = authProvider.user!.copyWith(kycVerified: true);
         await authProvider.updateUser(updatedUser);
+        if (!mounted) return;
       }
 
       setState(() {
@@ -176,16 +177,31 @@ class _KycScreenState extends State<KycScreen> {
             ),
             const SizedBox(height: 16),
 
-            _buildTypeOption(
-              type: KycType.nin,
-              title: 'National Identity Number (NIN)',
-              subtitle: '11-digit NIN',
-            ),
-            const SizedBox(height: 12),
-            _buildTypeOption(
-              type: KycType.bvn,
-              title: 'Bank Verification Number (BVN)',
-              subtitle: '11-digit BVN',
+            RadioGroup<KycType>(
+              groupValue: _selectedType,
+              onChanged: (value) {
+                if (value != null) {
+                  setState(() {
+                    _selectedType = value;
+                    _numberController.clear();
+                  });
+                }
+              },
+              child: Column(
+                children: [
+                  _buildTypeOption(
+                    type: KycType.nin,
+                    title: 'National Identity Number (NIN)',
+                    subtitle: '11-digit NIN',
+                  ),
+                  const SizedBox(height: 12),
+                  _buildTypeOption(
+                    type: KycType.bvn,
+                    title: 'Bank Verification Number (BVN)',
+                    subtitle: '11-digit BVN',
+                  ),
+                ],
+              ),
             ),
             const SizedBox(height: 24),
 
@@ -249,13 +265,6 @@ class _KycScreenState extends State<KycScreen> {
     final isSelected = _selectedType == type;
     return RadioListTile<KycType>(
       value: type,
-      groupValue: _selectedType,
-      onChanged: (value) {
-        setState(() {
-          _selectedType = value!;
-          _numberController.clear();
-        });
-      },
       title: Text(title),
       subtitle: Text(subtitle),
       shape: RoundedRectangleBorder(

@@ -98,7 +98,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                         end: Alignment.bottomRight,
                         colors: [
                           Theme.of(context).primaryColor,
-                          Theme.of(context).primaryColor.withOpacity(0.8),
+                          Theme.of(context).primaryColor.withValues(alpha: 0.8),
                         ],
                       ),
                     ),
@@ -112,7 +112,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.2),
+                                color: Colors.black.withValues(alpha: 0.2),
                                 blurRadius: 10,
                                 offset: const Offset(0, 5),
                               ),
@@ -122,7 +122,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                             radius: 50,
                             backgroundColor: Theme.of(
                               context,
-                            ).primaryColor.withOpacity(0.1),
+                            ).primaryColor.withValues(alpha: 0.1),
                             child: Text(
                               '${user.firstname[0]}${user.lastname[0]}'
                                   .toUpperCase(),
@@ -165,8 +165,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           ),
                           decoration: BoxDecoration(
                             color: user.kycVerified
-                                ? Colors.green.withOpacity(0.2)
-                                : Colors.orange.withOpacity(0.2),
+                                ? Colors.green.withValues(alpha: 0.2)
+                                : Colors.orange.withValues(alpha: 0.2),
                             borderRadius: BorderRadius.circular(20),
                             border: Border.all(
                               color: user.kycVerified
@@ -299,13 +299,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               colors: [
-                                Colors.purple.withOpacity(0.1),
-                                Colors.blue.withOpacity(0.1),
+                                Colors.purple.withValues(alpha: 0.1),
+                                Colors.blue.withValues(alpha: 0.1),
                               ],
                             ),
                             borderRadius: BorderRadius.circular(12),
                             border: Border.all(
-                              color: Colors.purple.withOpacity(0.3),
+                              color: Colors.purple.withValues(alpha: 0.3),
                             ),
                           ),
                           child: Row(

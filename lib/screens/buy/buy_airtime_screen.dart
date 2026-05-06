@@ -415,7 +415,7 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.blue.withOpacity(0.08),
+                  color: Colors.blue.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
@@ -772,10 +772,10 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
                                   vertical: 7,
                                 ),
                                 decoration: BoxDecoration(
-                                  color: Colors.orange.withOpacity(0.08),
+                                  color: Colors.orange.withValues(alpha: 0.08),
                                   borderRadius: BorderRadius.circular(8),
                                   border: Border.all(
-                                    color: Colors.orange.withOpacity(0.3),
+                                    color: Colors.orange.withValues(alpha: 0.3),
                                   ),
                                 ),
                                 child: Row(
@@ -812,7 +812,7 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
                         style: IconButton.styleFrom(
                           backgroundColor: Theme.of(
                             context,
-                          ).primaryColor.withOpacity(0.1),
+                          ).primaryColor.withValues(alpha: 0.1),
                           padding: const EdgeInsets.all(16),
                         ),
                       ),
@@ -991,7 +991,7 @@ class _BuyAirtimeScreenState extends State<BuyAirtimeScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Colors.blue.withOpacity(0.1),
+          backgroundColor: Colors.blue.withValues(alpha: 0.1),
           child: const Icon(Icons.phone_android, color: Colors.blue),
         ),
         title: Text(transaction.beneficiary ?? ''),

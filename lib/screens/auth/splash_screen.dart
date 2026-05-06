@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../config/app_constants.dart';
+import '../../config/client_config.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/app_lock_provider.dart';
 import '../../services/storage_service.dart';
@@ -77,6 +78,7 @@ class _SplashScreenState extends State<SplashScreen>
       }
 
       final isTokenValid = await authProvider.checkTokenValidity();
+      if (!mounted) return;
 
       if (authProvider.isAuthenticated && isTokenValid) {
         final lockProvider = context.read<AppLockProvider>();
@@ -124,8 +126,8 @@ class _SplashScreenState extends State<SplashScreen>
                 end: Alignment.bottomRight,
                 colors: [
                   Theme.of(context).primaryColor,
-                  Theme.of(context).primaryColor.withOpacity(0.7),
-                  Colors.black.withOpacity(0.85),
+                  Theme.of(context).primaryColor.withValues(alpha: 0.7),
+                  Colors.black.withValues(alpha: 0.85),
                 ],
                 stops: const [0.0, 0.5, 1.0],
               ),
@@ -141,7 +143,7 @@ class _SplashScreenState extends State<SplashScreen>
               height: size.width * 0.7,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha: 0.05),
               ),
             ),
           ),
@@ -153,7 +155,7 @@ class _SplashScreenState extends State<SplashScreen>
               height: size.width * 0.8,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: Colors.white.withOpacity(0.05),
+                color: Colors.white.withValues(alpha: 0.05),
               ),
             ),
           ),
@@ -180,12 +182,12 @@ class _SplashScreenState extends State<SplashScreen>
                             borderRadius: BorderRadius.circular(28),
                             boxShadow: [
                               BoxShadow(
-                                color: Colors.black.withOpacity(0.3),
+                                color: Colors.black.withValues(alpha: 0.3),
                                 blurRadius: 30,
                                 offset: const Offset(0, 15),
                               ),
                               BoxShadow(
-                                color: Colors.white.withOpacity(0.1),
+                                color: Colors.white.withValues(alpha: 0.1),
                                 blurRadius: 10,
                                 offset: const Offset(0, -5),
                               ),
@@ -194,7 +196,7 @@ class _SplashScreenState extends State<SplashScreen>
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(28),
                             child: Image.asset(
-                              'images/logo.jpg',
+                              BrandConfig.logoAsset,
                               fit: BoxFit.cover,
                               errorBuilder: (context, error, stackTrace) =>
                                   Icon(
@@ -209,7 +211,8 @@ class _SplashScreenState extends State<SplashScreen>
 
                         // App name
                         Text(
-                          AppConstants.appName,
+                          BrandConfig.appName,
+                          textAlign: TextAlign.center,
                           style: const TextStyle(
                             fontSize: 34,
                             fontWeight: FontWeight.bold,
@@ -221,10 +224,11 @@ class _SplashScreenState extends State<SplashScreen>
 
                         // Tagline
                         Text(
-                          'Fast & Reliable VTU Services',
+                          BrandConfig.tagline,
+                          textAlign: TextAlign.center,
                           style: TextStyle(
                             fontSize: 14,
-                            color: Colors.white.withOpacity(0.8),
+                            color: Colors.white.withValues(alpha: 0.8),
                             letterSpacing: 0.5,
                           ),
                         ),
@@ -275,7 +279,7 @@ class _SplashScreenState extends State<SplashScreen>
                           child: CircularProgressIndicator(
                             strokeWidth: 2.5,
                             valueColor: AlwaysStoppedAnimation<Color>(
-                              Colors.white.withOpacity(0.8),
+                              Colors.white.withValues(alpha: 0.8),
                             ),
                           ),
                         ),
@@ -283,7 +287,7 @@ class _SplashScreenState extends State<SplashScreen>
                         Text(
                           'Loading...',
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.6),
+                            color: Colors.white.withValues(alpha: 0.6),
                             fontSize: 12,
                           ),
                         ),
@@ -299,8 +303,9 @@ class _SplashScreenState extends State<SplashScreen>
                   opacity: _fadeAnimation,
                   child: Text(
                     'v${AppConstants.appVersion}',
+                    textAlign: TextAlign.center,
                     style: TextStyle(
-                      color: Colors.white.withOpacity(0.4),
+                      color: Colors.white.withValues(alpha: 0.4),
                       fontSize: 11,
                     ),
                   ),
@@ -326,9 +331,9 @@ class _FeaturePill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.12),
+        color: Colors.white.withValues(alpha: 0.12),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.white.withOpacity(0.2)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,

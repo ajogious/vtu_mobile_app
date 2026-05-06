@@ -231,18 +231,22 @@ class _TransactionFilterScreenState extends State<TransactionFilterScreen> {
                   // Date Range
                   _buildSectionTitle('Date Range'),
                   const SizedBox(height: 8),
-                  ..._dateRanges.map((range) {
-                    return RadioListTile<String>(
-                      title: Text(_getDateRangeLabel(range)),
-                      value: range,
-                      groupValue: _selectedDateRange,
-                      onChanged: (value) {
-                        setState(() => _selectedDateRange = value!);
-                      },
-                      contentPadding: EdgeInsets.zero,
-                      dense: true,
-                    );
-                  }),
+                  RadioGroup<String>(
+                    groupValue: _selectedDateRange,
+                    onChanged: (value) {
+                      setState(() => _selectedDateRange = value!);
+                    },
+                    child: Column(
+                      children: _dateRanges.map((range) {
+                        return RadioListTile<String>(
+                          title: Text(_getDateRangeLabel(range)),
+                          value: range,
+                          contentPadding: EdgeInsets.zero,
+                          dense: true,
+                        );
+                      }).toList(),
+                    ),
+                  ),
 
                   // Custom date picker
                   if (_selectedDateRange == 'custom') ...[

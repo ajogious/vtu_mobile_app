@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import '../../config/api_config.dart';
 
 class PaystackWebviewScreen extends StatefulWidget {
   final String authorizationUrl;
@@ -37,13 +38,15 @@ class _PaystackWebviewScreenState extends State<PaystackWebviewScreen> {
             });
           },
           onNavigationRequest: (NavigationRequest request) {
-            if (request.url.startsWith('https://a3tech.com.ng/api/app/v1/paystack/paystack_callback.php')) {
+            if (request.url.startsWith(
+              ApiConfig.baseUrl + ApiConfig.paystackCallbackEndpoint,
+            )) {
               Navigator.of(context).pop(true);
               return NavigationDecision.prevent;
             }
             if (request.url.contains('cancel')) {
-               Navigator.of(context).pop(false);
-               return NavigationDecision.prevent;
+              Navigator.of(context).pop(false);
+              return NavigationDecision.prevent;
             }
             return NavigationDecision.navigate;
           },
@@ -66,10 +69,7 @@ class _PaystackWebviewScreenState extends State<PaystackWebviewScreen> {
       body: Stack(
         children: [
           WebViewWidget(controller: _controller),
-          if (_isLoading)
-            const Center(
-              child: CircularProgressIndicator(),
-            ),
+          if (_isLoading) const Center(child: CircularProgressIndicator()),
         ],
       ),
     );

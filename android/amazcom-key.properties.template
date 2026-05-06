@@ -1,0 +1,11 @@
+# amazcom — Android Signing Properties
+# Copy this template to android/amazcom-key.properties and fill in real values.
+# This file must NEVER be committed to source control.
+#
+# To generate a new keystore:
+#   keytool -genkey -v -keystore amazcom.keystore -alias amazcom -keyalg RSA -keysize 2048 -validity 10000
+#
+storeFile=../amazcom.keystore
+storePassword=YOUR_STORE_PASSWORD
+keyAlias=amazcom
+keyPassword=YOUR_KEY_PASSWORD

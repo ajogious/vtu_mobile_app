@@ -1,0 +1,11 @@
+# Amazcom — Native Splash Config
+# Run with: dart run flutter_native_splash:create --path=flutter_native_splash_amazcom.yaml
+flutter_native_splash:
+  color: "#665ED5"
+  image: images/amazcom/logo.jpg
+  android_12:
+    image: images/amazcom/logo.jpg
+    icon_background_color: "#665ED5"
+    color: "#665ED5"
+  ios: true
+  fullscreen: false

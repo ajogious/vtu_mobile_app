@@ -47,7 +47,6 @@ class _PinInputState extends State<PinInput> {
     );
     _focusNodes = List.generate(widget.length, (index) => FocusNode());
 
-    // Auto-focus first field if enabled
     if (widget.autoFocus) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (_focusNodes.isNotEmpty && mounted) {
@@ -56,7 +55,6 @@ class _PinInputState extends State<PinInput> {
       });
     }
 
-    // Add listeners for backspace detection
     for (int i = 0; i < widget.length; i++) {
       _focusNodes[i].addListener(() {
         if (mounted) {
@@ -115,13 +113,9 @@ class _PinInputState extends State<PinInput> {
       }
     }
 
-    // Get complete PIN
-    String pin = _controllers.map((c) => c.text).join();
-
-    // Notify onChanged
+    final String pin = _controllers.map((c) => c.text).join();
     widget.onChanged?.call(pin);
 
-    // Check if complete
     if (pin.length == widget.length) {
       // Small delay for better UX
       Future.delayed(const Duration(milliseconds: 100), () {
@@ -133,10 +127,7 @@ class _PinInputState extends State<PinInput> {
   }
 
   void _handlePaste(String value, int startIndex) {
-    // Extract only digits
     final digits = value.replaceAll(RegExp(r'\D'), '');
-
-    // Fill fields from current index
     for (
       int i = 0;
       i < digits.length && (startIndex + i) < widget.length;
@@ -145,7 +136,6 @@ class _PinInputState extends State<PinInput> {
       _controllers[startIndex + i].text = digits[i];
     }
 
-    // Focus last filled field or complete
     final lastFilledIndex = (startIndex + digits.length - 1).clamp(
       0,
       widget.length - 1,
@@ -187,9 +177,8 @@ class _PinInputState extends State<PinInput> {
     widget.onClear?.call();
   }
 
-  /// Public method to shake animation on error
+  /// Marks all fields as error state (caller triggers visual feedback).
   void shake() {
-    // TODO: Implement shake animation if needed
     setState(() {
       _hasError = true;
     });
@@ -277,7 +266,7 @@ class _PinInputState extends State<PinInput> {
               filled: true,
               fillColor: widget.enabled
                   ? (isFocused
-                        ? theme.primaryColor.withOpacity(0.05)
+                        ? theme.primaryColor.withValues(alpha: 0.05)
                         : Colors.grey[50])
                   : Colors.grey[100],
               contentPadding: EdgeInsets.symmetric(vertical: width * 0.25),
@@ -296,7 +285,7 @@ class _PinInputState extends State<PinInput> {
                   color: _hasError
                       ? theme.colorScheme.error
                       : (hasValue
-                            ? theme.primaryColor.withOpacity(0.3)
+                            ? theme.primaryColor.withValues(alpha: 0.3)
                             : Colors.grey[300]!),
                   width: 1.5,
                 ),

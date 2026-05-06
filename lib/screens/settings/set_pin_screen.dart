@@ -57,7 +57,6 @@ class _SetPinScreenState extends State<SetPinScreen> {
       _isLoading = true;
     });
 
-    // Call API to set PIN
     final authService = context.read<AuthProvider>().authService;
     final result = await authService.api.setPin(pin: _pin);
 
@@ -68,19 +67,10 @@ class _SetPinScreenState extends State<SetPinScreen> {
     });
 
     if (result.success) {
-      // Save PIN locally
       await StorageService().savePin(_pin);
-
+      if (!mounted) return;
       UiHelpers.showSnackBar(context, result.message);
-
-      // Navigate back or to dashboard
-      if (widget.isFirstTime) {
-        // First time - go back to dashboard
-        Navigator.pop(context, true);
-      } else {
-        // From settings - go back
-        Navigator.pop(context);
-      }
+      Navigator.pop(context, widget.isFirstTime ? true : null);
     } else {
       UiHelpers.showSnackBar(
         context,
@@ -92,18 +82,16 @@ class _SetPinScreenState extends State<SetPinScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () async {
-        // Block back completely when setting PIN is mandatory
-        if (widget.isFirstTime) {
+    return PopScope(
+      canPop: !widget.isFirstTime,
+      onPopInvokedWithResult: (didPop, result) {
+        if (!didPop && widget.isFirstTime) {
           UiHelpers.showSnackBar(
             context,
             'You must set a transaction PIN before continuing',
             isError: true,
           );
-          return false;
         }
-        return true;
       },
       child: Scaffold(
         appBar: AppBar(

@@ -47,7 +47,7 @@ class CustomButton extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
         elevation: 2,
-        disabledBackgroundColor: backgroundColor?.withOpacity(0.6),
+        disabledBackgroundColor: backgroundColor?.withValues(alpha: 0.6),
       ),
       child: _buildChild(context),
     );
@@ -64,7 +64,7 @@ class CustomButton extends StatelessWidget {
           width: 2,
         ),
         disabledForegroundColor:
-            (backgroundColor ?? Theme.of(context).primaryColor).withOpacity(
+            (backgroundColor ?? Theme.of(context).primaryColor).withValues(alpha: 
               0.4,
             ),
       ),

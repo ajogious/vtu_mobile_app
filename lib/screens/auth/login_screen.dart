@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../providers/auth_provider.dart';
+import '../../config/client_config.dart';
 import '../../services/storage_service.dart';
 import '../widgets/custom_button.dart';
 import '../widgets/custom_textfield.dart';
@@ -158,7 +159,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 BoxShadow(
                                   color: Theme.of(
                                     context,
-                                  ).primaryColor.withOpacity(0.2),
+                                  ).primaryColor.withValues(alpha: 0.2),
                                   blurRadius: 16,
                                   offset: const Offset(0, 8),
                                 ),
@@ -167,9 +168,9 @@ class _LoginScreenState extends State<LoginScreen> {
                             child: ClipRRect(
                               borderRadius: BorderRadius.circular(20),
                               child: Image.asset(
-                                'images/logo.jpg',
+                                BrandConfig.logoAsset,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Icon(
+                                errorBuilder: (_, error, trace) => Icon(
                                   Icons.phone_android,
                                   size: 60,
                                   color: Theme.of(context).primaryColor,
@@ -286,7 +287,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                 decoration: BoxDecoration(
                                   color: Theme.of(
                                     context,
-                                  ).primaryColor.withOpacity(0.1),
+                                  ).primaryColor.withValues(alpha: 0.1),
                                   borderRadius: BorderRadius.circular(12),
                                 ),
                                 child: IconButton(

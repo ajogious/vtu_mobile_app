@@ -1,0 +1,11 @@
+# zamanconcept — Android Signing Properties
+# Copy this template to android/zamanconcept-key.properties and fill in real values.
+# This file must NEVER be committed to source control.
+#
+# To generate a new keystore:
+#   keytool -genkey -v -keystore zamanconcept.keystore -alias zamanconcept -keyalg RSA -keysize 2048 -validity 10000
+#
+storeFile=../zamanconcept.keystore
+storePassword=YOUR_STORE_PASSWORD
+keyAlias=zamanconcept
+keyPassword=YOUR_KEY_PASSWORD

@@ -1,0 +1,11 @@
+# AzDigital — Launcher Icons Config
+# Run with: dart run flutter_launcher_icons -f flutter_launcher_icons_azdigital.yaml
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "images/azdigital/logo.jpg"
+  min_sdk_android: 21
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: "images/azdigital/logo.jpg"
+  adaptive_icon_round: "images/azdigital/logo.jpg"
+  flavor: azdigital

@@ -91,8 +91,8 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
                     colors: [
-                      Colors.black.withOpacity(0.15),
-                      Colors.black.withOpacity(0.65),
+                      Colors.black.withValues(alpha: 0.15),
+                      Colors.black.withValues(alpha: 0.65),
                     ],
                   ),
                 ),
@@ -144,10 +144,10 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.15),
+                            color: Colors.white.withValues(alpha: 0.15),
                             shape: BoxShape.circle,
                             border: Border.all(
-                              color: Colors.white.withOpacity(0.4),
+                              color: Colors.white.withValues(alpha: 0.4),
                               width: 2,
                             ),
                           ),
@@ -175,7 +175,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                         Text(
                           _pages[_currentPage].description,
                           style: TextStyle(
-                            color: Colors.white.withOpacity(0.85),
+                            color: Colors.white.withValues(alpha: 0.85),
                             fontSize: isSmallScreen ? 14 : 16,
                             height: 1.5,
                           ),
@@ -252,7 +252,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
         fit: BoxFit.cover,
         // Fallback color if image fails to load
         errorBuilder: (context, error, stackTrace) =>
-            Container(color: Theme.of(context).primaryColor.withOpacity(0.1)),
+            Container(color: Theme.of(context).primaryColor.withValues(alpha: 0.1)),
       ),
     );
   }
@@ -266,7 +266,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
       decoration: BoxDecoration(
         color: _currentPage == index
             ? Colors.white
-            : Colors.white.withOpacity(0.4),
+            : Colors.white.withValues(alpha: 0.4),
         borderRadius: BorderRadius.circular(4),
       ),
     );

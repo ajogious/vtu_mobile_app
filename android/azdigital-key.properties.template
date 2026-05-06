@@ -1,0 +1,11 @@
+# azdigital — Android Signing Properties
+# Copy this template to android/azdigital-key.properties and fill in real values.
+# This file must NEVER be committed to source control.
+#
+# To generate a new keystore:
+#   keytool -genkey -v -keystore azdigital.keystore -alias azdigital -keyalg RSA -keysize 2048 -validity 10000
+#
+storeFile=../azdigital.keystore
+storePassword=YOUR_STORE_PASSWORD
+keyAlias=azdigital
+keyPassword=YOUR_KEY_PASSWORD

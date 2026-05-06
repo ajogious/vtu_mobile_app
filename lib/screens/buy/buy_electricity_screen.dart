@@ -367,16 +367,18 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
     );
 
     if (verifiedPin == null) {
+      if (!mounted) return;
       UiHelpers.showSnackBar(context, 'Transaction cancelled', isError: true);
       return;
     }
 
+    if (!mounted) return;
     if (amount >= 10000) {
       final reAuthenticated = await requireReAuthentication(
         context,
         action: 'authorize this large transaction',
       );
-
+      if (!mounted) return;
       if (!reAuthenticated) {
         UiHelpers.showSnackBar(
           context,
@@ -387,6 +389,7 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
       }
     }
 
+    if (!mounted) return;
     setState(() {
       _isProcessing = true;
     });
@@ -408,6 +411,7 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
 
     if (result.success && result.data != null) {
       await _saveBeneficiaryToStorage();
+      if (!mounted) return;
 
       final walletProvider = context.read<WalletProvider>();
       final balanceBefore = walletProvider.balance;
@@ -436,10 +440,12 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
       context.read<TransactionProvider>().addTransaction(transaction);
 
       await NotificationService.transactionSuccess(transaction);
+      if (!mounted) return;
 
       final newBalance = context.read<WalletProvider>().balance;
       if (newBalance < 500) {
         await NotificationService.lowBalance(newBalance);
+        if (!mounted) return;
       }
 
       Navigator.pushReplacement(
@@ -519,7 +525,7 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
                               },
                               selectedColor: Theme.of(
                                 context,
-                              ).primaryColor.withOpacity(0.2),
+                              ).primaryColor.withValues(alpha: 0.2),
                               labelStyle: TextStyle(
                                 color: isSelected
                                     ? Theme.of(context).primaryColor
@@ -811,7 +817,7 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
         padding: const EdgeInsets.symmetric(vertical: 20),
         decoration: BoxDecoration(
           color: isSelected
-              ? Theme.of(context).primaryColor.withOpacity(0.1)
+              ? Theme.of(context).primaryColor.withValues(alpha: 0.1)
               : Colors.grey[100],
           border: Border.all(
             color: isSelected
@@ -902,7 +908,7 @@ class _BuyElectricityScreenState extends State<BuyElectricityScreen> {
       margin: const EdgeInsets.only(bottom: 8),
       child: ListTile(
         leading: CircleAvatar(
-          backgroundColor: Colors.orange.withOpacity(0.1),
+          backgroundColor: Colors.orange.withValues(alpha: 0.1),
           child: const Icon(Icons.bolt, color: Colors.orange),
         ),
         title: Text(transaction.metadata?['customer_name'] ?? ''),

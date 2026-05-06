@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../config/client_config.dart';
 
 class LoadingOverlay extends StatefulWidget {
   final bool isLoading;
@@ -59,7 +60,7 @@ class _LoadingOverlayState extends State<LoadingOverlay>
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
+                        color: Colors.black.withValues(alpha: 0.15),
                         blurRadius: 20,
                         offset: const Offset(0, 10),
                       ),
@@ -80,7 +81,7 @@ class _LoadingOverlayState extends State<LoadingOverlay>
                               BoxShadow(
                                 color: Theme.of(
                                   context,
-                                ).primaryColor.withOpacity(0.3),
+                                ).primaryColor.withValues(alpha: 0.3),
                                 blurRadius: 12,
                                 offset: const Offset(0, 6),
                               ),
@@ -89,9 +90,9 @@ class _LoadingOverlayState extends State<LoadingOverlay>
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(16),
                             child: Image.asset(
-                              'images/logo.jpg',
+                              BrandConfig.logoAsset,
                               fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Icon(
+                              errorBuilder: (context, error, trace) => Icon(
                                 Icons.phone_android,
                                 size: 40,
                                 color: Theme.of(context).primaryColor,

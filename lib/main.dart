@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 // ignore: depend_on_referenced_packages
 import 'package:flutter_native_splash/flutter_native_splash.dart';
 import 'config/theme_config.dart';
+import 'flavors/flavor_config.dart';
 import 'providers/referral_provider.dart';
 import 'providers/app_lock_provider.dart';
 import 'services/cache_service.dart';
@@ -19,7 +20,9 @@ import 'screens/auth/splash_screen.dart';
 import 'screens/lock/app_lock_screen.dart';
 import 'utils/ui_helpers.dart';
 
-void main() async {
+/// Called by each flavor entry point (`lib/main_<flavor>.dart`) after
+/// [FlavorConfig.initialize] has been called with the correct [ClientConfig].
+void mainApp() async {
   // Preserve the native splash screen until init is complete —
   // prevents the blank flash between app launch and Flutter rendering.
   final widgetsBinding = WidgetsFlutterBinding.ensureInitialized();
@@ -135,16 +138,14 @@ class _VTUAppState extends State<VTUApp> with WidgetsBindingObserver {
     return Consumer<ThemeProvider>(
       builder: (context, themeProvider, child) {
         return MaterialApp(
-          title: 'A3TECH DATA',
+          title: FlavorConfig.instance.appName,
           debugShowCheckedModeBanner: false,
           theme: ThemeConfig.lightTheme,
           darkTheme: ThemeConfig.darkTheme,
           themeMode: themeProvider.themeMode,
           scaffoldMessengerKey: rootScaffoldMessengerKey,
           builder: (context, child) {
-            return Stack(
-              children: [?child, _AppLockOverlay()],
-            );
+            return Stack(children: [?child, _AppLockOverlay()]);
           },
           home: const SplashScreen(),
         );

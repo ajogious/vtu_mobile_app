@@ -55,7 +55,7 @@ class NetworkSelector extends StatelessWidget {
                   padding: const EdgeInsets.symmetric(vertical: 12),
                   decoration: BoxDecoration(
                     color: isSelected
-                        ? color.withOpacity(0.1)
+                        ? color.withValues(alpha: 0.1)
                         : Colors.grey[100],
                     border: Border.all(
                       color: isSelected ? color : Colors.grey[300]!,

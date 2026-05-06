@@ -1,0 +1,11 @@
+# A3TECH DATA — Launcher Icons Config
+# Run with: dart run flutter_launcher_icons -f flutter_launcher_icons_a3tech.yaml
+flutter_launcher_icons:
+  android: "ic_launcher"
+  ios: true
+  image_path: "images/a3tech/logo.jpg"
+  min_sdk_android: 21
+  adaptive_icon_background: "#ffffff"
+  adaptive_icon_foreground: "images/a3tech/logo.jpg"
+  adaptive_icon_round: "images/a3tech/logo.jpg"
+  flavor: a3tech

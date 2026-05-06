@@ -45,7 +45,6 @@ class _WithdrawEarningsScreenState extends State<WithdrawEarningsScreen> {
     final amount = double.parse(_amountController.text.trim());
     final availableBalance = context.read<ReferralProvider>().availableBalance;
 
-    // Check balance
     if (amount > availableBalance) {
       UiHelpers.showSnackBar(
         context,
@@ -55,7 +54,6 @@ class _WithdrawEarningsScreenState extends State<WithdrawEarningsScreen> {
       return;
     }
 
-    // Verify PIN
     final serverPinSet = context.read<AuthProvider>().user?.pinSet == true;
     final verifiedPin = await showPinVerificationDialog(
       context,
@@ -66,15 +64,16 @@ class _WithdrawEarningsScreenState extends State<WithdrawEarningsScreen> {
     );
 
     if (verifiedPin == null) {
+      if (!mounted) return;
       UiHelpers.showSnackBar(context, 'Withdrawal cancelled', isError: true);
       return;
     }
 
+    if (!mounted) return;
     setState(() {
       _isProcessing = true;
     });
 
-    // Process withdrawal
     final referralProvider = context.read<ReferralProvider>();
     Map<String, dynamic>? result;
     try {
@@ -87,6 +86,8 @@ class _WithdrawEarningsScreenState extends State<WithdrawEarningsScreen> {
       }
     }
 
+    if (!mounted) return;
+
     if (result != null) {
       // Add to wallet safely using specific backend balance
       final walletProvider = context.read<WalletProvider>();
@@ -98,7 +99,6 @@ class _WithdrawEarningsScreenState extends State<WithdrawEarningsScreen> {
         walletProvider.addBalance(amount);
       }
 
-      // Fetch the newest referral data without blocking
       referralProvider.fetchReferralData();
 
       // Fix: use referralWithdrawal not referralBonus
@@ -120,19 +120,15 @@ class _WithdrawEarningsScreenState extends State<WithdrawEarningsScreen> {
 
       context.read<TransactionProvider>().addTransaction(transaction);
 
-      // Fire wallet notification
       await NotificationService.walletCredited(amount, 'Referral Earnings');
 
       if (!mounted) return;
 
-      // Show green success snackbar
       UiHelpers.showSnackBar(
         context,
         '₦${NumberFormat('#,##0.00').format(amount)} transferred to your wallet',
         isError: false,
       );
-
-      // Pop back and signal referral screen to refresh
       Navigator.pop(context, true);
     } else {
       final errorMessage =
@@ -170,7 +166,7 @@ class _WithdrawEarningsScreenState extends State<WithdrawEarningsScreen> {
                             end: Alignment.bottomRight,
                             colors: [
                               Colors.green,
-                              Colors.green.withOpacity(0.8),
+                              Colors.green.withValues(alpha: 0.8),
                             ],
                           ),
                           borderRadius: BorderRadius.circular(16),

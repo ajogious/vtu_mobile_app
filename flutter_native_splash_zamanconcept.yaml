@@ -1,0 +1,11 @@
+# ZamanConcept — Native Splash Config
+# Run with: dart run flutter_native_splash:create --path=flutter_native_splash_zamanconcept.yaml
+flutter_native_splash:
+  color: "#665ED5"
+  image: images/zamanconcept/logo.jpg
+  android_12:
+    image: images/zamanconcept/logo.jpg
+    icon_background_color: "#665ED5"
+    color: "#665ED5"
+  ios: true
+  fullscreen: false
