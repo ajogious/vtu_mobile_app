@@ -27,7 +27,7 @@ val azdigitalKeys  = loadKeyProperties("azdigital-key.properties")
 android {
     namespace = "com.a3tech.vtumobile"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -80,21 +80,29 @@ android {
             dimension       = "client"
             applicationId   = "com.a3tech.vtumobile"
             resValue("string", "app_name", "A3TECH DATA")
+            signingConfig   = if (a3techKeys.isEmpty) signingConfigs.getByName("debug")
+                              else signingConfigs.getByName("a3tech_release")
         }
         create("amazcom") {
             dimension       = "client"
             applicationId   = "com.amazcom.vtumobile"
             resValue("string", "app_name", "Amazcom")
+            signingConfig   = if (amazcomKeys.isEmpty) signingConfigs.getByName("debug")
+                              else signingConfigs.getByName("amazcom_release")
         }
         create("zamanconcept") {
             dimension       = "client"
             applicationId   = "com.zamanconcept.vtumobile"
             resValue("string", "app_name", "ZamanConcept")
+            signingConfig   = if (zamanKeys.isEmpty) signingConfigs.getByName("debug")
+                              else signingConfigs.getByName("zamanconcept_release")
         }
         create("azdigital") {
             dimension       = "client"
             applicationId   = "com.azdigital.vtumobile"
             resValue("string", "app_name", "AzDigital")
+            signingConfig   = if (azdigitalKeys.isEmpty) signingConfigs.getByName("debug")
+                              else signingConfigs.getByName("azdigital_release")
         }
     }
 
@@ -103,6 +111,11 @@ android {
         targetSdk  = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
+        // Skip native debug symbol stripping (NDK not required locally;
+        // Google Play strips symbols automatically on upload)
+        ndk {
+            debugSymbolLevel = "NONE"
+        }
     }
 
     buildTypes {
@@ -114,25 +127,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-
-            // Map each flavor to its own signing config.
-            // Falls back to debug signing if the key.properties file is missing
-            // (allows CI/local debug builds without keystores present).
-            productFlavors.getByName("a3tech").signingConfig =
-                if (a3techKeys.isEmpty) signingConfigs.getByName("debug")
-                else signingConfigs.getByName("a3tech_release")
-
-            productFlavors.getByName("amazcom").signingConfig =
-                if (amazcomKeys.isEmpty) signingConfigs.getByName("debug")
-                else signingConfigs.getByName("amazcom_release")
-
-            productFlavors.getByName("zamanconcept").signingConfig =
-                if (zamanKeys.isEmpty) signingConfigs.getByName("debug")
-                else signingConfigs.getByName("zamanconcept_release")
-
-            productFlavors.getByName("azdigital").signingConfig =
-                if (azdigitalKeys.isEmpty) signingConfigs.getByName("debug")
-                else signingConfigs.getByName("azdigital_release")
+            // Signing is configured per-flavor above
         }
     }
 }

@@ -12,3 +12,9 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Per-flavor signing credentials — never commit these
+a3tech-key.properties
+amazcom-key.properties
+zamanconcept-key.properties
+azdigital-key.properties

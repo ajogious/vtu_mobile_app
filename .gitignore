@@ -186,3 +186,4 @@ android/*-key.properties
 # Keystore binaries
 *.keystore
 *.jks
+generate_keystores.ps1
