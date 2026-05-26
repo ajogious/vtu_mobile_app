@@ -111,10 +111,10 @@ android {
         targetSdk  = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
-        // Skip native debug symbol stripping (NDK not required locally;
-        // Google Play strips symbols automatically on upload)
+        // Enable native debug symbol packaging so Google Play Console
+        // can symbolicate native crash reports and eliminate Play Store warnings.
         ndk {
-            debugSymbolLevel = "NONE"
+            debugSymbolLevel = "SYMBOL_TABLE"
         }
     }
 
